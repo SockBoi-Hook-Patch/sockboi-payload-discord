@@ -439,6 +439,24 @@ async def status(ctx):
 
 @bot.command()
 @admin_only()
+async def diag(ctx):
+    """Self-check: version, ffmpeg, voice, config — paste output to SockBoi's AI."""
+    import shutil, platform
+    commit = os.getenv("RAILWAY_GIT_COMMIT_SHA", "")[:7] or "local"
+    ff = shutil.which("ffmpeg") or "NOT FOUND"
+    try:
+        n_rules = len(await ctx.guild.fetch_automod_rules())
+    except Exception as e:
+        n_rules = f"err: {e}"
+    vc = ctx.guild.voice_client
+    await ctx.send(
+        f"```\ncommit={commit} | py={platform.python_version()} | dpy={discord.__version__}\n"
+        f"ffmpeg={ff} | voice_client={vc} | latency={round(bot.latency*1000)}ms\n"
+        f"verify_wait={VERIFY_WAIT} | welcome_voice={WELCOME_VOICE}\n"
+        f"automod_native={n_rules} | whitelist={sorted(ALLOWED_DOMAINS)}\n```")
+
+@bot.command()
+@admin_only()
 async def pinall(ctx):
     """Pin latest bot msg in guide/rules/forms."""
     pinned = 0
