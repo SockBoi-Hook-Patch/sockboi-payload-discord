@@ -465,6 +465,27 @@ async def punish(msg, reason_en, reason_th, timeout_min):
     em.add_field(name="Content (redacted)", value=redact(msg.content) or "(embed/attach)", inline=False)
     await log_to_botlogs(msg.guild, embed=em)
 
+async def kick_punish(msg, reason_en, reason_th):
+    """Link violations = KICK (per SockBoi policy)."""
+    try:
+        await msg.delete()
+    except Exception:
+        pass
+    try:
+        await msg.author.send(f"{reason_th}\n{reason_en}\nโดนเตะออกเซิร์ฟเวอร์แล้ว อยากกลับเข้ามาอ่านกฎลิงก์ก่อน / Kicked. Read link rules before rejoining.")
+    except Exception:
+        pass
+    try:
+        await msg.author.kick(reason=reason_en)
+    except Exception:
+        pass
+    em = discord.Embed(title=f"👢 Automod KICK: {reason_en}", color=0xFF3333,
+        timestamp=datetime.now(timezone.utc))
+    em.add_field(name="User", value=f"{msg.author} (`{msg.author.id}`)", inline=False)
+    em.add_field(name="Channel", value=f"#{msg.channel.name}", inline=True)
+    em.add_field(name="Content (redacted)", value=redact(msg.content) or "(embed/attach)", inline=False)
+    await log_to_botlogs(msg.guild, embed=em)
+
 @bot.event
 async def on_message(msg):
     if msg.author.bot or not msg.guild or msg.guild.id != GUILD_ID:
@@ -498,17 +519,17 @@ async def on_message(msg):
     urls = URL_RE.findall(content) + INVITE_RE.findall(content)
     if urls and msg.channel.name in LINK_BLOCK_CHANNELS and not staff_bypass:
         if not has_any_role(member, BYPASS_LINK_ROLES):
-            await punish(msg, "Links blocked in this channel", "ห้องนี้ห้ามส่งลิงก์ (เฉพาะ Verified Modder+)", 10)
+            await kick_punish(msg, "Links blocked in this channel", "ห้องนี้ห้ามส่งลิงก์ (เฉพาะ Verified Modder+) — โดนเตะ")
             return
         # even bypassers: only whitelisted domains
         bad = [u for u in urls if not any(d in domain_of(u) for d in ALLOWED_DOMAINS)]
         if bad:
-            await punish(msg, f"Non-whitelisted link: {domain_of(bad[0])}", "ลิงก์นอก whitelist (github/t.me เท่านั้น)", 10)
+            await kick_punish(msg, f"Non-whitelisted link: {domain_of(bad[0])}", "ลิงก์นอก whitelist (github/t.me เท่านั้น) — โดนเตะ")
             return
     # APK links only in mod-releases by Core Dev+
     if APK_RE.search(content) and not staff_bypass:
         if not (msg.channel.name == "📱・mod-releases" and has_any_role(member, APK_POST_ROLES)):
-            await punish(msg, "APK links restricted", "ลิงก์ APK ลงได้แค่ #📱・mod-releases โดย Core Dev+", 10)
+            await kick_punish(msg, "APK links restricted", "ลิงก์ APK ลงได้แค่ #📱・mod-releases โดย Core Dev+ — โดนเตะ")
             return
     # 5. spam: same content 3x in 10s
     now = datetime.now(timezone.utc).timestamp()
