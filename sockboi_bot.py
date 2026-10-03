@@ -76,7 +76,48 @@ join_times = deque(maxlen=50)
 intents = discord.Intents.default()
 intents.members = True
 intents.message_content = True
+intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+WELCOME_VOICE = os.getenv("WELCOME_VOICE", "1") == "1"
+
+def welcome_channel(guild):
+    return (discord.utils.get(guild.text_channels, name="👋・welcome")
+            or discord.utils.get(guild.text_channels, name="💬・general"))
+
+async def make_welcome_card(member, age_days, age_flag, member_no):
+    """Hacker-style welcome card (PIL). Returns BytesIO or None."""
+    try:
+        from PIL import Image, ImageDraw
+        import io
+        W, H = 900, 320
+        img = Image.new("RGB", (W, H), (4, 10, 6))
+        d = ImageDraw.Draw(img)
+        for y in range(0, H, 4):  # scanlines
+            d.line([(0, y), (W, y)], fill=(0, 30, 12))
+        d.rectangle([4, 4, W - 5, H - 5], outline=(0, 255, 65), width=2)
+        d.text((30, 24), "[+] ACCESS GRANTED", fill=(0, 255, 65))
+        d.text((30, 52), "SOCKBOI'S PAYLOAD // NEW NODE", fill=(0, 200, 50))
+        name = (member.display_name or str(member))[:24]
+        d.text((30, 110), f"> {name}", fill=(220, 255, 220))
+        d.text((30, 150), f"  node #{member_no} | acct {age_days}d [{age_flag}]", fill=(0, 255, 65))
+        d.text((30, 190), "  $ verify: #verify (5 min)  $ guide: #server-guide", fill=(0, 180, 60))
+        d.text((30, 230), "  stay clean. no tokens. no leaks. -- SockBoi", fill=(0, 160, 55))
+        try:
+            raw = await member.display_avatar.read()
+            av = Image.open(io.BytesIO(raw)).convert("RGB").resize((150, 150))
+            mask = Image.new("L", (150, 150), 0)
+            ImageDraw.Draw(mask).ellipse([0, 0, 150, 150], fill=255)
+            img.paste(av, (W - 190, 85), mask)
+            ImageDraw.Draw(img).ellipse([W - 190, 85, W - 40, 235], outline=(0, 255, 65), width=2)
+        except Exception:
+            pass
+        buf = io.BytesIO()
+        img.save(buf, "PNG")
+        buf.seek(0)
+        return buf
+    except Exception:
+        return None
 
 def is_staff(m: discord.Member):
     return any(r.name in STAFF_ROLES for r in m.roles)
@@ -201,18 +242,18 @@ async def on_member_join(member):
         await member.send("ยินดีต้อนรับสู่ SockBoi's Payload 🎮 ไปยืนยันที่ #✅・verify อ่าน #🗺️・server-guide เช็ก #🛡️・detection-log ก่อนเล่นแรงก์นะ / Verify in #✅・verify to unlock drops!")
     except Exception:
         pass
-    # public hacker-style welcome in #general
+    # public hacker-style welcome in #welcome (fallback #general)
     try:
-        general = discord.utils.get(member.guild.text_channels, name="💬・general")
-        if general:
+        wch = welcome_channel(member.guild)
+        if wch:
             age_days = max(age.days, 0)
-            age_flag = "🟢 TRUSTED" if age > timedelta(days=30) else ("🟡 NEW" if age > timedelta(days=7) else "🔴 FRESH")
+            age_flag = "TRUSTED" if age > timedelta(days=30) else ("NEW" if age > timedelta(days=7) else "FRESH")
             em = discord.Embed(
                 title="[+] INCOMING CONNECTION // handshake accepted",
                 description=(
                     "```\n"
                     f"$ whoami\n> {member}\n"
-                    f"$ uptime --account\n> {age_days} days [{age_flag}]\n"
+                    f"$ uptime --account\n> {age_days} days\n"
                     f"$ grid --members\n> #{member.guild.member_count} nodes online\n"
                     "```"
                 ),
@@ -225,7 +266,58 @@ async def on_member_join(member):
                        "Stay clean. No tokens. No leaks."),
                 inline=False)
             em.set_footer(text=f"node_id :: {member.id}")
-            await general.send(f"👾 {member.mention} jacked into **SockBoi's Payload**", embed=em)
+            card = await make_welcome_card(member, age_days, age_flag, member.guild.member_count)
+            if card:
+                f = discord.File(card, filename="welcome.png")
+                em.set_image(url="attachment://welcome.png")
+                await wch.send(f"👾 {member.mention} jacked into **SockBoi's Payload**", embed=em, file=f)
+            else:
+                await wch.send(f"👾 {member.mention} jacked into **SockBoi's Payload**", embed=em)
+    except Exception:
+        pass
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Voice greeting: bot joins VC briefly + TTS welcome (needs FFmpeg on host)."""
+    try:
+        if member.bot or not WELCOME_VOICE:
+            return
+        if member.guild.id != GUILD_ID:
+            return
+        if after.channel is None or (before.channel and before.channel.id == after.channel.id):
+            return
+        vc = member.guild.voice_client
+        if vc and (vc.is_playing() or vc.is_connected()):
+            return
+        import tempfile
+        from gtts import gTTS
+        text = f"ยินดีต้อนรับ {member.display_name} สู่ ซ็อกบอย เพย์โหลด"
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
+            gTTS(text=text, lang="th").save(tf.name)
+            path = tf.name
+        try:
+            vc = await after.channel.connect(timeout=10)
+        except Exception:
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
+            return
+        try:
+            src = discord.FFmpegPCMAudio(path)
+            vc.play(src)
+            import asyncio as _aio
+            while vc.is_playing():
+                await _aio.sleep(1)
+        finally:
+            try:
+                await vc.disconnect()
+            except Exception:
+                pass
+            try:
+                os.unlink(path)
+            except Exception:
+                pass
     except Exception:
         pass
 
