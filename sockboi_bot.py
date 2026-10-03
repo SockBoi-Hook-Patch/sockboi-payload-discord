@@ -158,6 +158,90 @@ async def log_to_botlogs(guild, embed=None, text=None):
     except Exception:
         pass
 
+async def member_log(guild, embed=None, text=None):
+    ch = (discord.utils.get(guild.text_channels, name="📤・member-log")
+          or discord.utils.get(guild.text_channels, name="🚨・bot-logs"))
+    if not ch:
+        return
+    try:
+        if embed is not None:
+            await ch.send(embed=embed)
+        elif text:
+            await ch.send(text)
+    except Exception:
+        pass
+
+@bot.event
+async def on_member_remove(member):
+    """Leave vs kick (via audit log) -> #member-log."""
+    try:
+        if member.guild.id != GUILD_ID:
+            return
+        now = datetime.now(timezone.utc)
+        action, by, reason = "leave", None, ""
+        try:
+            async for e in member.guild.audit_logs(limit=5, action=discord.AuditLogAction.kick):
+                if e.target and e.target.id == member.id and (now - e.created_at).total_seconds() < 30:
+                    action, by, reason = "kick", e.user, e.reason or ""
+                    break
+        except Exception:
+            pass
+        if action == "kick":
+            em = discord.Embed(title="👢 KICK // node ejected", color=0xFFAA00, timestamp=now)
+            em.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+            em.add_field(name="By", value=str(by) if by else "-", inline=True)
+            em.add_field(name="Reason", value=reason or "-", inline=True)
+        else:
+            joined = member.joined_at.strftime("%d/%m/%Y %H:%M") if getattr(member, "joined_at", None) else "-"
+            em = discord.Embed(title="📤 LEAVE // connection closed", color=0x888888, timestamp=now)
+            em.add_field(name="User", value=f"{member} (`{member.id}`)", inline=False)
+            em.add_field(name="Joined", value=joined, inline=True)
+            em.add_field(name="Members now", value=str(member.guild.member_count), inline=True)
+        await member_log(member.guild, embed=em)
+    except Exception:
+        pass
+
+@bot.event
+async def on_member_ban(guild, user):
+    try:
+        if guild.id != GUILD_ID:
+            return
+        reason = ""
+        try:
+            e = await guild.fetch_ban(user)
+            reason = e.reason or ""
+        except Exception:
+            pass
+        em = discord.Embed(title="🔨 BAN // node terminated", color=0xFF3333,
+                           timestamp=datetime.now(timezone.utc))
+        em.add_field(name="User", value=f"{user} (`{user.id}`)", inline=False)
+        em.add_field(name="Reason", value=reason or "-", inline=False)
+        await member_log(guild, embed=em)
+    except Exception:
+        pass
+
+@bot.event
+async def on_member_unban(guild, user):
+    try:
+        if guild.id != GUILD_ID:
+            return
+        em = discord.Embed(title="✅ UNBAN // node restored", color=0x00FF41,
+                           timestamp=datetime.now(timezone.utc))
+        em.add_field(name="User", value=f"{user} (`{user.id}`)", inline=False)
+        await member_log(guild, embed=em)
+    except Exception:
+        pass
+    ch = discord.utils.get(guild.text_channels, name="🚨・bot-logs")
+    if not ch:
+        return
+    try:
+        if embed is not None:
+            await ch.send(embed=embed)
+        elif text:
+            await ch.send(text)
+    except Exception:
+        pass
+
 def redact(s: str):
     # never log full token/webhook
     s = TOKEN_RE.sub("[REDACTED TOKEN]", s)
