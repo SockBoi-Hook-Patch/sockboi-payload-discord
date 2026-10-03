@@ -81,6 +81,13 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 WELCOME_VOICE = os.getenv("WELCOME_VOICE", "1") == "1"
 
+# Preload opus explicitly (Debian libopus0) so voice never hits OpusNotLoaded.
+try:
+    if not discord.opus.is_loaded():
+        discord.opus.load_opus("libopus.so.0")
+except Exception:
+    pass
+
 def ffmpeg_path():
     """System ffmpeg first, else bundled static binary (imageio-ffmpeg, no apt needed)."""
     import shutil
