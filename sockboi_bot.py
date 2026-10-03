@@ -447,6 +447,133 @@ def admin_only():
         return is_staff(ctx.author) or ctx.author.guild_permissions.administrator
     return commands.check(pred)
 
+def mod_only():
+    async def pred(ctx):
+        return (is_staff(ctx.author)
+                or ctx.author.guild_permissions.manage_messages
+                or ctx.author.guild_permissions.administrator)
+    return commands.check(pred)
+
+@bot.command()
+@mod_only()
+async def clear(ctx, n: int = 10):
+    """ลบแชท n ข้อความล่าสุด (1-200) | !clear 20"""
+    n = max(1, min(n, 200))
+    try:
+        deleted = await ctx.channel.purge(limit=n + 1)
+        msg = await ctx.send(f"🧹 ล้าง {len(deleted) - 1} ข้อความแล้ว")
+        await msg.delete(delay=5)
+    except discord.Forbidden:
+        await ctx.send("บอทไม่มีสิทธิ์ Manage Messages")
+
+@bot.command()
+@mod_only()
+async def timeout(ctx, member: discord.Member, minutes: int = 10, *, reason: str = ""):
+    """mute ชั่วคราว | !timeout @user 30 สแปม"""
+    try:
+        await member.timeout(timedelta(minutes=minutes), reason=reason or "mod timeout")
+        await ctx.send(f"⏳ {member.mention} โดน timeout {minutes} นาที {f'({reason})' if reason else ''}")
+    except discord.Forbidden:
+        await ctx.send("ทำไม่ได้ — role บอทต้องอยู่เหนือเป้าหมาย")
+
+@bot.command()
+@mod_only()
+async def untimeout(ctx, member: discord.Member):
+    try:
+        await member.timeout(None, reason="unmuted")
+        await ctx.send(f"✅ ปลด timeout {member.mention} แล้ว")
+    except discord.Forbidden:
+        await ctx.send("ทำไม่ได้ — เช็ก role บอท")
+
+@bot.command()
+@admin_only()
+async def kick(ctx, member: discord.Member, *, reason: str = ""):
+    await member.kick(reason=reason or "kicked")
+    await ctx.send(f"👢 เตะ {member} แล้ว {f'({reason})' if reason else ''}")
+
+@bot.command()
+@admin_only()
+async def ban(ctx, member: discord.Member, *, reason: str = ""):
+    await member.ban(reason=reason or "banned", delete_message_days=1)
+    await ctx.send(f"🔨 แบน {member} แล้ว {f'({reason})' if reason else ''}")
+
+@bot.command()
+@admin_only()
+async def unban(ctx, user_id: int):
+    try:
+        u = await bot.fetch_user(user_id)
+        await ctx.guild.unban(u)
+        await ctx.send(f"✅ ปลดแบน {u} แล้ว")
+    except Exception as e:
+        await ctx.send(f"ปลดไม่ได้: {e}")
+
+@bot.command()
+@mod_only()
+async def slowmode(ctx, seconds: int = 0):
+    """!slowmode 30 เปิด / !slowmode 0 ปิด"""
+    await ctx.channel.edit(slowmode_delay=max(0, min(seconds, 21600)), reason="mod slowmode")
+    await ctx.send(f"🐢 slowmode {seconds}s ใน #{ctx.channel.name}")
+
+@bot.command()
+@mod_only()
+async def lock(ctx):
+    """ล็อกห้อง (เฉพาะทีมพิมพ์ได้)"""
+    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=False, reason="locked")
+    await ctx.send(f"🔒 ล็อก #{ctx.channel.name} แล้ว (`!unlock` เพื่อเปิด)")
+
+@bot.command()
+@mod_only()
+async def unlock(ctx):
+    await ctx.channel.set_permissions(ctx.guild.default_role, send_messages=None, reason="unlocked")
+    await ctx.send(f"🔓 เปิด #{ctx.channel.name} แล้ว")
+
+@bot.command()
+@mod_only()
+async def userinfo(ctx, member: discord.Member = None):
+    """ดูข้อมูลสมาชิก (อายุแอค วันเข้าฯ ยศ) | !userinfo @user"""
+    m = member or ctx.author
+    now = datetime.now(timezone.utc)
+    age = now - m.created_at
+    flag = "🟢" if age > timedelta(days=30) else ("🟡" if age > timedelta(days=7) else "🔴")
+    roles = ", ".join(r.name for r in m.roles if r.name != "@everyone") or "-"
+    em = discord.Embed(title=f"{flag} {m}", color=0x00FF41, timestamp=now)
+    em.add_field(name="ID", value=str(m.id), inline=True)
+    em.add_field(name="อายุแอค", value=f"{age.days} วัน", inline=True)
+    em.add_field(name="เข้าฯ", value=m.joined_at.strftime("%d/%m/%Y") if m.joined_at else "-", inline=True)
+    em.add_field(name="Roles", value=roles[:1000], inline=False)
+    if m.display_avatar:
+        em.set_thumbnail(url=m.display_avatar.url)
+    await ctx.send(embed=em)
+
+@bot.command()
+@admin_only()
+async def detect(ctx, build: str, status: str, *, note: str = ""):
+    """ลงสถานะม็อดใน detection-log | !detect v26.9.02 detected โดนแบน 3 วัน"""
+    st = status.lower()
+    color = {"safe": 0x00FF41, "risky": 0xFFAA00, "detected": 0xFF3333}.get(st, 0x888888)
+    ch = discord.utils.get(ctx.guild.text_channels, name="🛡️・detection-log")
+    if not ch:
+        await ctx.send("หาห้อง detection-log ไม่เจอ")
+        return
+    em = discord.Embed(title=f"[{st.upper()}] {build}", description=note or "-", color=color,
+                       timestamp=datetime.now(timezone.utc))
+    em.set_footer(text=f"by {ctx.author}")
+    await ch.send(embed=em)
+    await ctx.send(f"✅ ลง {build} = {st} แล้ว")
+
+@bot.command()
+@admin_only()
+async def announce(ctx, *, text: str):
+    """ประกาศในห้อง announcements | !announce ..."""
+    ch = discord.utils.get(ctx.guild.text_channels, name="📣・announcements")
+    if not ch:
+        await ctx.send("หาห้อง announcements ไม่เจอ")
+        return
+    em = discord.Embed(title="📣 ประกาศจาก SockBoi", description=text, color=0x0A0A0A,
+                       timestamp=datetime.now(timezone.utc))
+    await ch.send(embed=em)
+    await ctx.send("✅ ประกาศแล้ว")
+
 @bot.command()
 @admin_only()
 async def setup_verify(ctx):
