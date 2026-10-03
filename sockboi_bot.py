@@ -314,14 +314,21 @@ async def on_voice_state_update(member, before, after):
             await log_to_botlogs(member.guild, text="⚠️ Voice greeting skipped: ไม่มี ffmpeg (system + bundled)")
             return
         from gtts import gTTS
-        text = f"ยินดีต้อนรับ {member.display_name} สู่ ซ็อกบอย เพย์โหลด"
+        text = f"ยินดีต้อนรับ {member.display_name} สู่ ซ็อกบอยเพย์โหลด น้า"
         try:
+            # kawaii female voice: Premwadee + pitch/rate up
+            import edge_tts
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
-                gTTS(text=text, lang="th").save(tf.name)
                 path = tf.name
-        except Exception as e:
-            await log_to_botlogs(member.guild, text=f"⚠️ TTS ล้มเหลว: {e}")
-            return
+            await edge_tts.Communicate(text, "th-TH-PremwadeeNeural", rate="+12%", pitch="+22Hz").save(path)
+        except Exception:
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
+                    gTTS(text=text, lang="th").save(tf.name)
+                    path = tf.name
+            except Exception as e:
+                await log_to_botlogs(member.guild, text=f"⚠️ TTS ล้มเหลว: {e}")
+                return
         try:
             vc = await after.channel.connect(timeout=10)
         except Exception as e:
