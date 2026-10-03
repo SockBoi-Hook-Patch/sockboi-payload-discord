@@ -105,6 +105,8 @@ def redact(s: str):
     return s[:1500]
 
 # ---------- VERIFY VIEW ----------
+VERIFY_WAIT = timedelta(minutes=5)
+
 class VerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -112,6 +114,16 @@ class VerifyView(discord.ui.View):
     async def verify(self, inter: discord.Interaction, button: discord.ui.Button):
         guild = inter.guild
         member = guild.get_member(inter.user.id)
+        # new-join gate: must wait 5 min after joining
+        joined = getattr(member, "joined_at", None)
+        if joined is not None:
+            left = VERIFY_WAIT - (datetime.now(timezone.utc) - joined)
+            if left.total_seconds() > 0:
+                m, s = divmod(int(left.total_seconds()), 60)
+                await inter.response.send_message(
+                    f"⏳ แอคใหม่รอ {m} นาที {s} วิ แล้วกดอีกทีนะ / Please wait {m}m {s}s after joining.",
+                    ephemeral=True)
+                return
         unver = discord.utils.get(guild.roles, name="Unverified")
         mem = discord.utils.get(guild.roles, name="Member")
         try:
