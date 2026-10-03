@@ -398,7 +398,7 @@ async def on_voice_state_update(member, before, after):
             await log_to_botlogs(member.guild, text="⚠️ Voice greeting skipped: ไม่มี ffmpeg (system + bundled)")
             return
         from gtts import gTTS
-        text = f"ยินดีต้อนรับ {member.display_name} สู่ ชุมชน คนโกงเกม"
+        text = f"ยินดีต้อนรับ {member.display_name}"
         try:
             # clear normal female voice (Premwadee, no pitch/rate shift)
             import edge_tts
