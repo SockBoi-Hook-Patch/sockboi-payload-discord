@@ -1,0 +1,10 @@
+# secrets — NEVER commit real token
+.env
+*.env
+sockboi_bot_data.json
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
