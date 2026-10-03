@@ -201,6 +201,33 @@ async def on_member_join(member):
         await member.send("ยินดีต้อนรับสู่ SockBoi's Payload 🎮 ไปยืนยันที่ #✅・verify อ่าน #🗺️・server-guide เช็ก #🛡️・detection-log ก่อนเล่นแรงก์นะ / Verify in #✅・verify to unlock drops!")
     except Exception:
         pass
+    # public hacker-style welcome in #general
+    try:
+        general = discord.utils.get(member.guild.text_channels, name="💬・general")
+        if general:
+            age_days = max(age.days, 0)
+            age_flag = "🟢 TRUSTED" if age > timedelta(days=30) else ("🟡 NEW" if age > timedelta(days=7) else "🔴 FRESH")
+            em = discord.Embed(
+                title="[+] INCOMING CONNECTION // handshake accepted",
+                description=(
+                    "```\n"
+                    f"$ whoami\n> {member}\n"
+                    f"$ uptime --account\n> {age_days} days [{age_flag}]\n"
+                    f"$ grid --members\n> #{member.guild.member_count} nodes online\n"
+                    "```"
+                ),
+                color=0x00FF41, timestamp=now)
+            em.add_field(
+                name="// PAYLOAD BRIEF",
+                value=("✅ กด verify ที่ #✅・verify (เข้าใหม่รอ 5 นาที)\n"
+                       "🗺️ อ่าน #🗺️・server-guide ว่าของอยู่ไหน\n"
+                       "🛡️ เช็ก #🛡️・detection-log ก่อนเล่นแรงก์\n"
+                       "Stay clean. No tokens. No leaks."),
+                inline=False)
+            em.set_footer(text=f"node_id :: {member.id}")
+            await general.send(f"👾 {member.mention} jacked into **SockBoi's Payload**", embed=em)
+    except Exception:
+        pass
 
 async def punish(msg, reason_en, reason_th, timeout_min):
     try:
