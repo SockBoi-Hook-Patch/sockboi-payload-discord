@@ -1,0 +1,27 @@
+Bypass CookieRun Classic
+v26.9.02 (arm64-v8a)
+Base: liblibresslkit.so (DoveRunner AppSecurity 3.2.0.2)
+Source: IDA Pro analysis
+
+[Detection]
+[0x008B8FBC]
+FD 7B BB A9 FA 67 01 A9 -> 00 00 80 52 C0 03 5F D6   (detector fn -> ret 0)
+[0x00913EC8]
+01 60 00 39 -> 1F 20 03 D5                            (flag+24 setter STRB -> NOP)
+[0x00937460]
+FD 7B BB A9 F9 0B 00 F9 -> 00 00 80 52 C0 03 5F D6   (detector fn -> ret 0)
+[0x00A8A8D8]
+00 60 40 39 C0 03 5F D6 -> 00 00 80 52 C0 03 5F D6   (flag+24 getter -> ret 0)
+
+[Kill surface]
+[0x005C5F34] / [0x005C5F94] / [0x005C5FBC]
+21 01 80 52 -> 1F 00 80 52   (pidfd_send_signal x3, sig 9->0)
+[0x008EE9F4]
+21 01 80 52 -> 1F 00 80 52   (kill(pid,9)->(pid,0))
+[0x008A5DB8]
+21 01 80 52 -> 1F 00 80 52   (rt_sigqueueinfo sig 9->0)
+[0x008BAECC]
+E1 A5 0D D4 -> 1F 20 03 D5   (seccomp install SVC->NOP)
+
+🛡️ เช็ก #detection-log ก่อนเล่นแรงก์ | อย่าดูดไปปล่อยข้างนอก
+— SockBoi

@@ -81,6 +81,18 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 WELCOME_VOICE = os.getenv("WELCOME_VOICE", "1") == "1"
 
+def ffmpeg_path():
+    """System ffmpeg first, else bundled static binary (imageio-ffmpeg, no apt needed)."""
+    import shutil
+    p = shutil.which("ffmpeg")
+    if p:
+        return p
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception:
+        return None
+
 def welcome_channel(guild):
     return (discord.utils.get(guild.text_channels, name="👋・welcome")
             or discord.utils.get(guild.text_channels, name="💬・general"))
@@ -289,9 +301,10 @@ async def on_voice_state_update(member, before, after):
         vc = member.guild.voice_client
         if vc and (vc.is_playing() or vc.is_connected()):
             return
-        import tempfile, shutil
-        if shutil.which("ffmpeg") is None:
-            await log_to_botlogs(member.guild, text="⚠️ Voice greeting skipped: FFmpeg ไม่เจอบน host (เช็ก nixpacks rebuild)")
+        import tempfile
+        ff = ffmpeg_path()
+        if ff is None:
+            await log_to_botlogs(member.guild, text="⚠️ Voice greeting skipped: ไม่มี ffmpeg (system + bundled)")
             return
         from gtts import gTTS
         text = f"ยินดีต้อนรับ {member.display_name} สู่ ซ็อกบอย เพย์โหลด"
@@ -312,7 +325,7 @@ async def on_voice_state_update(member, before, after):
                 pass
             return
         try:
-            src = discord.FFmpegPCMAudio(path)
+            src = discord.FFmpegPCMAudio(path, executable=ff)
             vc.play(src)
             import asyncio as _aio
             while vc.is_playing():
