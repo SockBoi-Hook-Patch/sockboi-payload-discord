@@ -146,7 +146,7 @@ def redact(s: str):
     return s[:1500]
 
 # ---------- VERIFY VIEW ----------
-VERIFY_WAIT = timedelta(minutes=5)
+VERIFY_WAIT = timedelta(minutes=2)
 
 class VerifyView(discord.ui.View):
     def __init__(self):
@@ -260,7 +260,7 @@ async def on_member_join(member):
                 color=0x00FF41, timestamp=now)
             em.add_field(
                 name="// PAYLOAD BRIEF",
-                value=("✅ กด verify ที่ #✅・verify (เข้าใหม่รอ 5 นาที)\n"
+                value=("✅ กด verify ที่ #✅・verify (เข้าใหม่รอ 2 นาที)\n"
                        "🗺️ อ่าน #🗺️・server-guide ว่าของอยู่ไหน\n"
                        "🛡️ เช็ก #🛡️・detection-log ก่อนเล่นแรงก์\n"
                        "Stay clean. No tokens. No leaks."),
@@ -289,15 +289,23 @@ async def on_voice_state_update(member, before, after):
         vc = member.guild.voice_client
         if vc and (vc.is_playing() or vc.is_connected()):
             return
-        import tempfile
+        import tempfile, shutil
+        if shutil.which("ffmpeg") is None:
+            await log_to_botlogs(member.guild, text="⚠️ Voice greeting skipped: FFmpeg ไม่เจอบน host (เช็ก nixpacks rebuild)")
+            return
         from gtts import gTTS
         text = f"ยินดีต้อนรับ {member.display_name} สู่ ซ็อกบอย เพย์โหลด"
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
-            gTTS(text=text, lang="th").save(tf.name)
-            path = tf.name
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
+                gTTS(text=text, lang="th").save(tf.name)
+                path = tf.name
+        except Exception as e:
+            await log_to_botlogs(member.guild, text=f"⚠️ TTS ล้มเหลว: {e}")
+            return
         try:
             vc = await after.channel.connect(timeout=10)
-        except Exception:
+        except Exception as e:
+            await log_to_botlogs(member.guild, text=f"⚠️ เข้าห้องเสียงไม่ได้: {e}")
             try:
                 os.unlink(path)
             except Exception:
@@ -309,6 +317,8 @@ async def on_voice_state_update(member, before, after):
             import asyncio as _aio
             while vc.is_playing():
                 await _aio.sleep(1)
+        except Exception as e:
+            await log_to_botlogs(member.guild, text=f"⚠️ เล่นเสียงทักทายล้มเหลว: {e}")
         finally:
             try:
                 await vc.disconnect()
