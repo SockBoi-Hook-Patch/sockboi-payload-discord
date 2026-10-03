@@ -404,7 +404,7 @@ async def on_voice_state_update(member, before, after):
             import edge_tts
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
                 path = tf.name
-            await edge_tts.Communicate(text, "th-TH-PremwadeeNeural", rate="+0%", pitch="+0Hz").save(path)
+            await edge_tts.Communicate(text, "th-TH-PremwadeeNeural", rate="-15%", pitch="+0Hz").save(path)
         except Exception:
             try:
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
