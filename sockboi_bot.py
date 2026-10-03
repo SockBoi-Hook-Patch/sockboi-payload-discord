@@ -331,7 +331,9 @@ async def on_voice_state_update(member, before, after):
             while vc.is_playing():
                 await _aio.sleep(1)
         except Exception as e:
-            await log_to_botlogs(member.guild, text=f"⚠️ เล่นเสียงทักทายล้มเหลว: {e}")
+            import traceback as _tb
+            detail = _tb.format_exc(limit=5)[-800:]
+            await log_to_botlogs(member.guild, text=f"⚠️ เล่นเสียงล้มเหลว: {type(e).__name__}: {e!r}\n```{detail}```")
         finally:
             try:
                 await vc.disconnect()
