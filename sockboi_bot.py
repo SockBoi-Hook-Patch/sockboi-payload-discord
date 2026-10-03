@@ -666,6 +666,47 @@ async def detect(ctx, build: str, status: str, *, note: str = ""):
     await ch.send(embed=em)
     await ctx.send(f"✅ ลง {build} = {st} แล้ว")
 
+ADMIN_STATUS = {
+    "offshore": ("🛢️", "Offshore — ทำงานกลางทะเล", "ตอบช้าหน่อย เน็ตกลางทะเล 🌊", 0x3B82F6),
+    "dayoff": ("🏖️", "Day Off", "พักผ่อน ตอบเมื่อว่าง", 0x00FF41),
+    "gaming": ("🎮", "เล่นเกม", "ชวนจอยได้", 0x9B59B6),
+    "online": ("🟢", "Online", "ว่างคุยได้", 0x00FF41),
+}
+ADMIN_ALIAS = {"ทะเล": "offshore", "พัก": "dayoff", "พักผ่อน": "dayoff",
+               "เกม": "gaming", "ออนไลน์": "online", "ว่าง": "online"}
+
+@bot.command()
+@admin_only()
+async def adminstatus(ctx, choice: str = "", *, note: str = ""):
+    """ตั้งสถานะแอดมิน | !adminstatus offshore|dayoff|gaming|online [หมายเหตุ]"""
+    key = ADMIN_ALIAS.get(choice, choice.lower())
+    if key not in ADMIN_STATUS:
+        await ctx.send("ใช้: `!adminstatus offshore|dayoff|gaming|online [หมายเหตุ]`\n(ไทย: ทะเล/พัก/เกม/ออนไลน์)")
+        return
+    emoji, title, desc, color = ADMIN_STATUS[key]
+    if note:
+        desc = f"{desc}\n💬 {note}"
+    ch = discord.utils.get(ctx.guild.text_channels, name="🟢・admin-status")
+    if not ch:
+        await ctx.send("หาห้อง admin-status ไม่เจอ")
+        return
+    em = discord.Embed(title=f"{emoji} SockBoi Status: {title}", description=desc, color=color,
+                       timestamp=datetime.now(timezone.utc))
+    target = None
+    async for m in ch.history(limit=20):
+        if m.author == bot.user and m.embeds and "SockBoi Status" in (m.embeds[0].title or ""):
+            target = m
+            break
+    if target:
+        await target.edit(embed=em)
+    else:
+        target = await ch.send(embed=em)
+        try:
+            await target.pin(reason="admin status")
+        except Exception:
+            pass
+    await ctx.send(f"✅ สถานะ: {emoji} {title}")
+
 @bot.command()
 @admin_only()
 async def announce(ctx, *, text: str):
