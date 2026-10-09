@@ -17,6 +17,9 @@ class VerificationPolicyTests(unittest.TestCase):
     def test_verification_timeout_is_one_hour(self):
         self.assertEqual(sockboi_bot.VERIFY_TIMEOUT.total_seconds(), 3600)
 
+    def test_new_members_can_verify_after_one_minute(self):
+        self.assertEqual(sockboi_bot.VERIFY_WAIT.total_seconds(), 60)
+
     def test_gate_denies_view_but_preserves_unrelated_permissions(self):
         existing = sockboi_bot.discord.PermissionOverwrite(
             view_channel=True,

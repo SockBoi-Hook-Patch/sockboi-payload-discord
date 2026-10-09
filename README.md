@@ -7,6 +7,7 @@ anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM
 - New members receive `Unverified` and can view only `#👋・welcome` and `#✅・verify`; all other categories/channels are hidden until verification. The bot enforces channel/category permission overwrites on startup and when new channels are created.
 - Unverified members cannot send messages anywhere (the bot also removes messages as a fallback if channel permissions are misconfigured).
 - Pressing the Verify button removes `Unverified` and grants `Member`.
+- New members can press Verify after a 1-minute anti-raid grace period; the 1-hour kick deadline remains unchanged.
 - Members who still have `Unverified` one hour after joining are kicked. Deadlines are saved in `sockboi_bot_data.json` and checked by the bot worker.
 - Railway note: attach a persistent volume if you need verification deadlines/offense data to survive container replacement/redeploy. Without persistent storage, deadlines survive ordinary process restarts only while that filesystem remains intact.
 

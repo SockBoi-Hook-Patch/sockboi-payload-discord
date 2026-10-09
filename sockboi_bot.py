@@ -379,7 +379,7 @@ def redact(s: str):
     return s[:1500]
 
 # ---------- VERIFY VIEW ----------
-VERIFY_WAIT = timedelta(minutes=2)
+VERIFY_WAIT = timedelta(minutes=1)
 
 class VerifyView(discord.ui.View):
     def __init__(self):
@@ -388,7 +388,7 @@ class VerifyView(discord.ui.View):
     async def verify(self, inter: discord.Interaction, button: discord.ui.Button):
         guild = inter.guild
         member = guild.get_member(inter.user.id)
-        # Existing anti-raid grace period: wait 2 min before verifying.
+        # Brief anti-raid grace period: wait 1 min before verifying.
         joined = getattr(member, "joined_at", None)
         if joined is not None:
             left = VERIFY_WAIT - (datetime.now(timezone.utc) - joined)
@@ -516,7 +516,7 @@ async def on_member_join(member):
                 color=0x00FF41, timestamp=now)
             em.add_field(
                 name="// PAYLOAD BRIEF",
-                value=("✅ กด verify ที่ #✅・verify ภายใน 1 ชั่วโมง (เข้าใหม่รอ 2 นาที)\n"
+                value=("✅ กด verify ที่ #✅・verify ภายใน 1 ชั่วโมง (เข้าใหม่รอ 1 นาที)\n"
                        "🗺️ อ่าน #🗺️・server-guide ว่าของอยู่ไหน\n"
                        "🛡️ เช็ก #🛡️・detection-log ก่อนเล่นแรงก์\n"
                        "Stay clean. No tokens. No leaks."),
