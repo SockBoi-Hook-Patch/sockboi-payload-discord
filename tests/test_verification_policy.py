@@ -47,6 +47,7 @@ class VerificationPolicyTests(unittest.TestCase):
                 loaded = sockboi_bot.load_data()
             self.assertEqual(loaded["offenses"], {"spam:123": 2})
             self.assertEqual(loaded["verification_deadlines"], {})
+            self.assertEqual(loaded["verification_alerts"], {})
 
 
 if __name__ == "__main__":

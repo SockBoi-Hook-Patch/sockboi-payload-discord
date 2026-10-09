@@ -62,9 +62,10 @@ def load_data():
                 data = {}
             data.setdefault("offenses", {})
             data.setdefault("verification_deadlines", {})
+            data.setdefault("verification_alerts", {})
             return data
     except Exception:
-        return {"offenses": {}, "verification_deadlines": {}}
+        return {"offenses": {}, "verification_deadlines": {}, "verification_alerts": {}}
 def save_data(d):
     try:
         tmp_file = DATA_FILE + ".tmp"
@@ -76,6 +77,7 @@ def save_data(d):
 DB = load_data()
 DB.setdefault("offenses", {})
 DB.setdefault("verification_deadlines", {})
+DB.setdefault("verification_alerts", {})
 
 VERIFY_TIMEOUT = timedelta(hours=1)
 VERIFY_ALLOWED_CATEGORIES = set()
@@ -238,11 +240,12 @@ async def enforce_verification_gate(guild, channel=None):
         await log_to_botlogs(guild, text=f"🔒 Verification gate updated: {changed} channel/category permission overwrites; Unverified can only view information and verification areas.")
 
 async def verification_timeout_worker():
-    """Kick only members who still have Unverified after their persisted 1-hour deadline."""
+    """Alert staff once, then kick members still Unverified after the persisted 1-hour deadline."""
     await bot.wait_until_ready()
     while not bot.is_closed():
         now = datetime.now(timezone.utc)
         deadlines = DB.setdefault("verification_deadlines", {})
+        alerts = DB.setdefault("verification_alerts", {})
         changed = False
         for key, raw_deadline in list(deadlines.items()):
             try:
@@ -251,6 +254,7 @@ async def verification_timeout_worker():
                     deadline = deadline.replace(tzinfo=timezone.utc)
             except (TypeError, ValueError):
                 deadlines.pop(key, None)
+                alerts.pop(key, None)
                 changed = True
                 continue
             if deadline > now:
@@ -259,6 +263,7 @@ async def verification_timeout_worker():
                 guild_id, user_id = (int(part) for part in key.split(":", 1))
             except (ValueError, AttributeError):
                 deadlines.pop(key, None)
+                alerts.pop(key, None)
                 changed = True
                 continue
             guild = bot.get_guild(guild_id)
@@ -268,6 +273,7 @@ async def verification_timeout_worker():
                 member = await guild.fetch_member(user_id)
             except discord.NotFound:
                 deadlines.pop(key, None)
+                alerts.pop(key, None)
                 changed = True
                 continue
             except discord.HTTPException as exc:
@@ -276,11 +282,29 @@ async def verification_timeout_worker():
             unverified = discord.utils.get(guild.roles, name="Unverified")
             if not unverified or unverified not in member.roles:
                 deadlines.pop(key, None)
+                alerts.pop(key, None)
                 changed = True
                 continue
+            if key not in alerts:
+                ch = discord.utils.get(guild.text_channels, name="🚨・bot-logs")
+                if ch:
+                    em = discord.Embed(
+                        title="⚠️ Verification overdue — kick pending",
+                        description=(f"{member} (`{member.id}`) still has `Unverified` after the 1-hour deadline. "
+                                     "The bot will kick this member now."),
+                        color=0xFFAA00,
+                        timestamp=now,
+                    )
+                    try:
+                        await ch.send(embed=em, allowed_mentions=discord.AllowedMentions.none())
+                        alerts[key] = now.isoformat()
+                        changed = True
+                    except discord.HTTPException:
+                        pass
             try:
                 await member.kick(reason="Did not verify within 1 hour of joining")
                 deadlines.pop(key, None)
+                alerts.pop(key, None)
                 changed = True
                 await member_log(
                     guild,
@@ -306,6 +330,7 @@ async def on_member_remove(member):
         if member.guild.id != GUILD_ID:
             return
         DB.setdefault("verification_deadlines", {}).pop(f"{member.guild.id}:{member.id}", None)
+        DB.setdefault("verification_alerts", {}).pop(f"{member.guild.id}:{member.id}", None)
         save_data(DB)
         now = datetime.now(timezone.utc)
         action, by, reason = "leave", None, ""
@@ -406,6 +431,7 @@ class VerifyView(discord.ui.View):
             if mem and mem not in member.roles:
                 await member.add_roles(mem, reason="verified")
             DB.setdefault("verification_deadlines", {}).pop(f"{guild.id}:{member.id}", None)
+            DB.setdefault("verification_alerts", {}).pop(f"{guild.id}:{member.id}", None)
             save_data(DB)
             await inter.response.send_message("ยืนยันแล้ว! ห้องม็อดปลดล็อกแล้ว 🎮 / Verified — drops unlocked!", ephemeral=True)
         except discord.Forbidden:

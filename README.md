@@ -9,6 +9,7 @@ anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM
 - Pressing the Verify button removes `Unverified` and grants `Member`.
 - New members can press Verify after a 1-minute anti-raid grace period; the 1-hour kick deadline remains unchanged.
 - Members who still have `Unverified` one hour after joining are kicked. Deadlines are saved in `sockboi_bot_data.json` and checked by the bot worker.
+- When that deadline is reached, the bot sends a one-time staff alert in `#🚨・bot-logs` before attempting the kick; it does not ping `@everyone`.
 - Railway note: attach a persistent volume if you need verification deadlines/offense data to survive container replacement/redeploy. Without persistent storage, deadlines survive ordinary process restarts only while that filesystem remains intact.
 
 ## Run locally
