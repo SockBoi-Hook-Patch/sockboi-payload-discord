@@ -10,6 +10,10 @@ import sockboi_bot  # noqa: E402
 
 
 class VerificationPolicyTests(unittest.TestCase):
+    def test_only_welcome_and_verify_are_allowlisted(self):
+        self.assertEqual(sockboi_bot.VERIFY_ALLOWED_CHANNELS, {"👋・welcome", "✅・verify"})
+        self.assertEqual(sockboi_bot.VERIFY_ALLOWED_CATEGORIES, set())
+
     def test_verification_timeout_is_one_hour(self):
         self.assertEqual(sockboi_bot.VERIFY_TIMEOUT.total_seconds(), 3600)
 

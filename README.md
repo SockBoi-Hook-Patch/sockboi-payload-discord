@@ -4,7 +4,7 @@ Automate bot for SockBoi's Payload (TH/EN): token/webhook/nitro protection, link
 anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM, logging to `#🚨・bot-logs`.
 
 ## Verification policy
-- New members receive `Unverified` and can view only the information and verification areas; the bot enforces channel/category permission overwrites on startup and when new channels are created.
+- New members receive `Unverified` and can view only `#👋・welcome` and `#✅・verify`; all other categories/channels are hidden until verification. The bot enforces channel/category permission overwrites on startup and when new channels are created.
 - Unverified members cannot send messages anywhere (the bot also removes messages as a fallback if channel permissions are misconfigured).
 - Pressing the Verify button removes `Unverified` and grants `Member`.
 - Members who still have `Unverified` one hour after joining are kicked. Deadlines are saved in `sockboi_bot_data.json` and checked by the bot worker.

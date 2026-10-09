@@ -78,11 +78,8 @@ DB.setdefault("offenses", {})
 DB.setdefault("verification_deadlines", {})
 
 VERIFY_TIMEOUT = timedelta(hours=1)
-VERIFY_ALLOWED_CATEGORIES = {"📌 INFORMATION", "🎭 VERIFICATION & ROLES"}
-VERIFY_ALLOWED_CHANNELS = {
-    "📜・rules", "📣・announcements", "🗺️・server-guide", "🔄・changelogs",
-    "✅・verify", "🎖️・role-select", "👋・welcome",
-}
+VERIFY_ALLOWED_CATEGORIES = set()
+VERIFY_ALLOWED_CHANNELS = {"👋・welcome", "✅・verify"}
 
 # spam tracker: user_id -> deque[(content_hash, ts)]
 recent_msgs = defaultdict(lambda: deque(maxlen=10))
@@ -217,10 +214,11 @@ async def enforce_verification_gate(guild, channel=None):
             allowed = target.name in VERIFY_ALLOWED_CATEGORIES
         else:
             parent = getattr(target, "category", None)
-            allowed = (getattr(parent, "name", None) in VERIFY_ALLOWED_CATEGORIES
-                       or target.name in VERIFY_ALLOWED_CHANNELS)
-            # Synced channels inherit the category overwrite; avoid making them unsynced.
-            if getattr(target, "permissions_synced", False):
+            parent_allowed = getattr(parent, "name", None) in VERIFY_ALLOWED_CATEGORIES
+            allowed = parent_allowed or target.name in VERIFY_ALLOWED_CHANNELS
+            # Synced channels already inherit the right setting. Break sync only for
+            # the two explicitly allowed channels when their parent category is denied.
+            if getattr(target, "permissions_synced", False) and allowed == parent_allowed:
                 continue
         current = target.overwrites_for(role)
         expected = verification_overwrite(current, allowed)
