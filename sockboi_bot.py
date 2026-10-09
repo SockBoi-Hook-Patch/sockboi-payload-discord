@@ -18,7 +18,7 @@ Run 24/7: python sockboi_bot.py  (needs .env with DISCORD_BOT_TOKEN + GUILD_ID)
 Required bot perms: Administrator (or Manage Messages + Moderate Members + Manage Channels + Manage Roles).
 Role order: SockBoi Bot role ABOVE Member/Unverified (else timeout/role fails).
 """
-import os, re, sys
+import asyncio, os, re, sys
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
     sys.stderr.reconfigure(encoding="utf-8", errors="ignore")
@@ -57,21 +57,39 @@ DATA_FILE = "sockboi_bot_data.json"
 def load_data():
     try:
         with open(DATA_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            if not isinstance(data, dict):
+                data = {}
+            data.setdefault("offenses", {})
+            data.setdefault("verification_deadlines", {})
+            return data
     except Exception:
-        return {"offenses": {}}
+        return {"offenses": {}, "verification_deadlines": {}}
 def save_data(d):
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        tmp_file = DATA_FILE + ".tmp"
+        with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(d, f)
+        os.replace(tmp_file, DATA_FILE)
     except Exception:
         pass
 DB = load_data()
+DB.setdefault("offenses", {})
+DB.setdefault("verification_deadlines", {})
+
+VERIFY_TIMEOUT = timedelta(hours=1)
+VERIFY_ALLOWED_CATEGORIES = {"📌 INFORMATION", "🎭 VERIFICATION & ROLES"}
+VERIFY_ALLOWED_CHANNELS = {
+    "📜・rules", "📣・announcements", "🗺️・server-guide", "🔄・changelogs",
+    "✅・verify", "🎖️・role-select", "👋・welcome",
+}
 
 # spam tracker: user_id -> deque[(content_hash, ts)]
 recent_msgs = defaultdict(lambda: deque(maxlen=10))
 # join tracker for raid: deque[ts]
 join_times = deque(maxlen=50)
+verification_worker_task = None
+verification_gate_configured = set()
 
 intents = discord.Intents.default()
 intents.members = True
@@ -120,7 +138,7 @@ async def make_welcome_card(member, age_days, age_flag, member_no):
         name = (member.display_name or str(member))[:24]
         d.text((30, 110), f"> {name}", fill=(220, 255, 220))
         d.text((30, 150), f"  node #{member_no} | acct {age_days}d [{age_flag}]", fill=(0, 255, 65))
-        d.text((30, 190), "  $ verify: #verify (5 min)  $ guide: #server-guide", fill=(0, 180, 60))
+        d.text((30, 190), "  $ verify: #verify (within 1 hour)  $ guide: #server-guide", fill=(0, 180, 60))
         d.text((30, 230), "  stay clean. no tokens. no leaks. -- SockBoi", fill=(0, 160, 55))
         try:
             raw = await member.display_avatar.read()
@@ -171,12 +189,126 @@ async def member_log(guild, embed=None, text=None):
     except Exception:
         pass
 
+def verification_overwrite(current, can_view):
+    """Preserve unrelated role permissions while enforcing the verification gate."""
+    updated = discord.PermissionOverwrite.from_pair(*current.pair())
+    updated.view_channel = can_view
+    updated.read_message_history = can_view
+    updated.send_messages = False
+    updated.send_messages_in_threads = False
+    updated.create_public_threads = False
+    updated.create_private_threads = False
+    updated.connect = False
+    updated.speak = False
+    return updated
+
+async def enforce_verification_gate(guild, channel=None):
+    """Deny Unverified access everywhere except the information/verification area."""
+    role = discord.utils.get(guild.roles, name="Unverified")
+    if not role:
+        await log_to_botlogs(guild, text="⚠️ Verification gate not applied: role `Unverified` is missing.")
+        return
+    targets = [channel] if channel is not None else list(guild.channels)
+    changed = 0
+    for target in targets:
+        if target is None:
+            continue
+        if isinstance(target, discord.CategoryChannel):
+            allowed = target.name in VERIFY_ALLOWED_CATEGORIES
+        else:
+            parent = getattr(target, "category", None)
+            allowed = (getattr(parent, "name", None) in VERIFY_ALLOWED_CATEGORIES
+                       or target.name in VERIFY_ALLOWED_CHANNELS)
+            # Synced channels inherit the category overwrite; avoid making them unsynced.
+            if getattr(target, "permissions_synced", False):
+                continue
+        current = target.overwrites_for(role)
+        expected = verification_overwrite(current, allowed)
+        if current == expected:
+            continue
+        try:
+            await target.set_permissions(
+                role, overwrite=expected,
+                reason="Verification gate: restrict Unverified access until /verify",
+            )
+            changed += 1
+        except discord.Forbidden:
+            await log_to_botlogs(guild, text=f"⚠️ Cannot apply verification gate to `{target.name}`: missing Manage Channels.")
+        except discord.HTTPException as exc:
+            await log_to_botlogs(guild, text=f"⚠️ Verification gate failed for `{target.name}`: {exc}")
+    if changed:
+        await log_to_botlogs(guild, text=f"🔒 Verification gate updated: {changed} channel/category permission overwrites; Unverified can only view information and verification areas.")
+
+async def verification_timeout_worker():
+    """Kick only members who still have Unverified after their persisted 1-hour deadline."""
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        now = datetime.now(timezone.utc)
+        deadlines = DB.setdefault("verification_deadlines", {})
+        changed = False
+        for key, raw_deadline in list(deadlines.items()):
+            try:
+                deadline = datetime.fromisoformat(raw_deadline)
+                if deadline.tzinfo is None:
+                    deadline = deadline.replace(tzinfo=timezone.utc)
+            except (TypeError, ValueError):
+                deadlines.pop(key, None)
+                changed = True
+                continue
+            if deadline > now:
+                continue
+            try:
+                guild_id, user_id = (int(part) for part in key.split(":", 1))
+            except (ValueError, AttributeError):
+                deadlines.pop(key, None)
+                changed = True
+                continue
+            guild = bot.get_guild(guild_id)
+            if guild is None:
+                continue
+            try:
+                member = await guild.fetch_member(user_id)
+            except discord.NotFound:
+                deadlines.pop(key, None)
+                changed = True
+                continue
+            except discord.HTTPException as exc:
+                await log_to_botlogs(guild, text=f"⚠️ Could not check verification deadline for user `{user_id}`: {exc}")
+                continue
+            unverified = discord.utils.get(guild.roles, name="Unverified")
+            if not unverified or unverified not in member.roles:
+                deadlines.pop(key, None)
+                changed = True
+                continue
+            try:
+                await member.kick(reason="Did not verify within 1 hour of joining")
+                deadlines.pop(key, None)
+                changed = True
+                await member_log(
+                    guild,
+                    embed=discord.Embed(
+                        title="👢 Verification timeout — member kicked",
+                        description=f"{member} (`{member.id}`) still had `Unverified` after 1 hour.",
+                        color=0xFFAA00,
+                        timestamp=now,
+                    ),
+                )
+            except discord.Forbidden:
+                await log_to_botlogs(guild, text=f"⚠️ Could not kick `{member}` for verification timeout: role hierarchy or Kick Members permission.")
+            except discord.HTTPException as exc:
+                await log_to_botlogs(guild, text=f"⚠️ Kick failed for `{member}` at verification timeout: {exc}")
+        if changed:
+            save_data(DB)
+        await asyncio.sleep(30)
+
 @bot.event
 async def on_member_remove(member):
     """Leave vs kick (via audit log) -> #member-log."""
     try:
         if member.guild.id != GUILD_ID:
             return
+        DB.setdefault("verification_deadlines", {}).pop(f"{member.guild.id}:{member.id}", None)
+        save_data(DB)
         now = datetime.now(timezone.utc)
         action, by, reason = "leave", None, ""
         try:
@@ -258,7 +390,7 @@ class VerifyView(discord.ui.View):
     async def verify(self, inter: discord.Interaction, button: discord.ui.Button):
         guild = inter.guild
         member = guild.get_member(inter.user.id)
-        # new-join gate: must wait 5 min after joining
+        # Existing anti-raid grace period: wait 2 min before verifying.
         joined = getattr(member, "joined_at", None)
         if joined is not None:
             left = VERIFY_WAIT - (datetime.now(timezone.utc) - joined)
@@ -275,6 +407,8 @@ class VerifyView(discord.ui.View):
                 await member.remove_roles(unver, reason="verified")
             if mem and mem not in member.roles:
                 await member.add_roles(mem, reason="verified")
+            DB.setdefault("verification_deadlines", {}).pop(f"{guild.id}:{member.id}", None)
+            save_data(DB)
             await inter.response.send_message("ยืนยันแล้ว! ห้องม็อดปลดล็อกแล้ว 🎮 / Verified — drops unlocked!", ephemeral=True)
         except discord.Forbidden:
             await inter.response.send_message("บอทติด permission — บอก SockBoi ขยับ role บอทขึ้นบนสุด / Bot needs higher role.", ephemeral=True)
@@ -309,22 +443,43 @@ class RoleView(discord.ui.View):
 
 @bot.event
 async def on_ready():
+    global verification_worker_task
     bot.add_view(VerifyView())
     bot.add_view(RoleView())
+    for guild in bot.guilds:
+        if guild.id == GUILD_ID and guild.id not in verification_gate_configured:
+            await enforce_verification_gate(guild)
+            verification_gate_configured.add(guild.id)
+    if verification_worker_task is None or verification_worker_task.done():
+        verification_worker_task = asyncio.create_task(verification_timeout_worker())
     print(f"Logged in as {bot.user} — guild {GUILD_ID} — automate ON")
+
+@bot.event
+async def on_guild_channel_create(channel):
+    if channel.guild.id == GUILD_ID:
+        await enforce_verification_gate(channel.guild, channel=channel)
 
 @bot.event
 async def on_member_join(member):
     if member.guild.id != GUILD_ID:
         return
     now = datetime.now(timezone.utc)
-    # gate: give Unverified
+    # Gate: add Unverified and persist an expiry exactly one hour from join.
     try:
         unver = discord.utils.get(member.guild.roles, name="Unverified")
         if unver:
             await member.add_roles(unver, reason="join gate")
+            deadline = now + VERIFY_TIMEOUT
+            DB.setdefault("verification_deadlines", {})[f"{member.guild.id}:{member.id}"] = deadline.isoformat()
+            save_data(DB)
+            await log_to_botlogs(
+                member.guild,
+                text=f"⏳ Verification timer started for `{member}` (`{member.id}`); deadline <t:{int(deadline.timestamp())}:R>.",
+            )
+        else:
+            await log_to_botlogs(member.guild, text="⚠️ New member joined, but role `Unverified` is missing; verification gate could not be assigned.")
     except Exception:
-        pass
+        await log_to_botlogs(member.guild, text=f"⚠️ Failed to assign `Unverified` to `{member}`; check Manage Roles and role hierarchy.")
     # flag young accounts
     age = now - member.created_at
     if age < timedelta(days=7):
@@ -342,7 +497,7 @@ async def on_member_join(member):
                 pass
     # welcome DM
     try:
-        await member.send("ยินดีต้อนรับสู่ SockBoi's Payload 🎮 ไปยืนยันที่ #✅・verify อ่าน #🗺️・server-guide เช็ก #🛡️・detection-log ก่อนเล่นแรงก์นะ / Verify in #✅・verify to unlock drops!")
+        await member.send("ยินดีต้อนรับสู่ SockBoi's Payload 🎮 กรุณากดยืนยันที่ #✅・verify ภายใน 1 ชั่วโมงเพื่อปลดล็อกห้อง หากไม่ยืนยัน บัญชีจะถูกเตะออกจากเซิร์ฟเวอร์ อ่าน #🗺️・server-guide และเช็ก #🛡️・detection-log ก่อนเล่นแรงก์นะ / Verify in #✅・verify within 1 hour to unlock channels; unverified accounts are kicked.")
     except Exception:
         pass
     # public hacker-style welcome in #welcome (fallback #general)
@@ -363,7 +518,7 @@ async def on_member_join(member):
                 color=0x00FF41, timestamp=now)
             em.add_field(
                 name="// PAYLOAD BRIEF",
-                value=("✅ กด verify ที่ #✅・verify (เข้าใหม่รอ 2 นาที)\n"
+                value=("✅ กด verify ที่ #✅・verify ภายใน 1 ชั่วโมง (เข้าใหม่รอ 2 นาที)\n"
                        "🗺️ อ่าน #🗺️・server-guide ว่าของอยู่ไหน\n"
                        "🛡️ เช็ก #🛡️・detection-log ก่อนเล่นแรงก์\n"
                        "Stay clean. No tokens. No leaks."),
@@ -498,6 +653,20 @@ async def on_message(msg):
     content = msg.content or ""
     member = msg.author
     staff_bypass = is_staff(member)
+
+    unverified = discord.utils.get(msg.guild.roles, name="Unverified")
+    if unverified and unverified in member.roles and not staff_bypass:
+        try:
+            await msg.delete()
+        except discord.Forbidden:
+            await log_to_botlogs(msg.guild, text=f"⚠️ Could not delete a message from Unverified member `{member}` in `#{msg.channel.name}`; check Manage Messages.")
+        except discord.HTTPException:
+            pass
+        try:
+            await member.send("กรุณากดปุ่ม Verify ใน #✅・verify ก่อนเริ่มพิมพ์ในเซิร์ฟเวอร์ / Please verify in #✅・verify before chatting.")
+        except discord.HTTPException:
+            pass
+        return
 
     # 1. token
     if TOKEN_RE.search(content):
@@ -724,7 +893,7 @@ async def announce(ctx, *, text: str):
 @admin_only()
 async def setup_verify(ctx):
     ch = discord.utils.get(ctx.guild.text_channels, name="✅・verify")
-    await (ch or ctx.channel).send("**✅ ยืนยันตัวตน / Verify**\nกดปุ่มเพื่อรับ Member + ปลดล็อกห้องม็อด / Press to verify.", view=VerifyView())
+    await (ch or ctx.channel).send("**✅ ยืนยันตัวตน / Verify**\nกดปุ่มเพื่อรับ Member + ปลดล็อกห้องม็อด ภายใน 1 ชั่วโมงหลังเข้าร่วม / Press to verify within 1 hour of joining to unlock the server.", view=VerifyView())
 
 @bot.command()
 @admin_only()

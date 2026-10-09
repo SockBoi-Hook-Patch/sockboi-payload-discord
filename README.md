@@ -1,7 +1,14 @@
 # SockBoi's Payload — Discord Bot
 
 Automate bot for SockBoi's Payload (TH/EN): token/webhook/nitro protection, link + APK filter,
-anti-spam, anti-raid slowmode, verify + self-role buttons, welcome DM, logging to `#🚨・bot-logs`.
+anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM, logging to `#🚨・bot-logs`.
+
+## Verification policy
+- New members receive `Unverified` and can view only the information and verification areas; the bot enforces channel/category permission overwrites on startup and when new channels are created.
+- Unverified members cannot send messages anywhere (the bot also removes messages as a fallback if channel permissions are misconfigured).
+- Pressing the Verify button removes `Unverified` and grants `Member`.
+- Members who still have `Unverified` one hour after joining are kicked. Deadlines are saved in `sockboi_bot_data.json` and checked by the bot worker.
+- Railway note: attach a persistent volume if you need verification deadlines/offense data to survive container replacement/redeploy. Without persistent storage, deadlines survive ordinary process restarts only while that filesystem remains intact.
 
 ## Run locally
 ```
