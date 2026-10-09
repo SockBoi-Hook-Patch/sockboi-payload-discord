@@ -20,6 +20,17 @@ class VerificationPolicyTests(unittest.TestCase):
     def test_new_members_can_verify_after_one_minute(self):
         self.assertEqual(sockboi_bot.VERIFY_WAIT.total_seconds(), 60)
 
+    def test_member_copy_uses_bilingual_hacker_theme_and_current_policy(self):
+        self.assertIn("HANDSHAKE ACCEPTED", sockboi_bot.WELCOME_DM_TEMPLATE)
+        self.assertIn("ACCESS GATE", sockboi_bot.WELCOME_PUBLIC_FIELD_NAME)
+        self.assertIn("1 นาที", sockboi_bot.WELCOME_PUBLIC_FIELD_VALUE)
+        self.assertIn("1 hour", sockboi_bot.WELCOME_PUBLIC_FIELD_VALUE)
+        self.assertIn("DEVICE ROLE LOADED", sockboi_bot.ROLE_ADDED_TEMPLATE)
+        self.assertIn("ACCESS GATE OPEN", sockboi_bot.VERIFY_SUCCESS_MESSAGE)
+        self.assertIn("wait 1 minute", sockboi_bot.VERIFY_SETUP_MESSAGE)
+        self.assertIn("1 hour", sockboi_bot.VERIFY_SETUP_MESSAGE)
+        self.assertIn("Android / Root / No-Root / Emulator", sockboi_bot.ROLE_SETUP_MESSAGE)
+
     def test_gate_denies_view_but_preserves_unrelated_permissions(self):
         existing = sockboi_bot.discord.PermissionOverwrite(
             view_channel=True,

@@ -98,6 +98,60 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 WELCOME_VOICE = os.getenv("WELCOME_VOICE", "1") == "1"
 
+# Member-facing copy approved in the Discord copy review.
+WELCOME_DM_TEMPLATE = (
+    "👾 HANDSHAKE ACCEPTED — ยินดีต้อนรับสู่ SockBoi's Payload!\n"
+    "👾 HANDSHAKE ACCEPTED — Welcome to SockBoi's Payload!\n\n"
+    "✅ ACCESS GATE: ไปที่ {verify_channel} แล้วกด Verify หลังเข้าร่วมครบ 1 นาที เพื่อรับ role Member และปลดล็อก member channels\n"
+    "✅ ACCESS GATE: Go to {verify_channel} and press Verify 1 minute after joining to receive the Member role and unlock member channels.\n"
+    "⏱️ TIMER: หากยังเป็น Unverified ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์\n"
+    "⏱️ TIMER: If you remain Unverified for 1 hour after joining, the bot will kick you from the server.\n"
+    "📘 อ่าน {guide_channel} และตรวจ {detection_channel} ก่อนเล่นแรงก์\n"
+    "📘 Read {guide_channel} and check {detection_channel} before ranked play."
+)
+WELCOME_PUBLIC_MESSAGE_TEMPLATE = "👾 {mention} เชื่อมต่อเข้า **SockBoi's Payload** แล้ว / jacked into **SockBoi's Payload**"
+WELCOME_PUBLIC_TITLE = "[+] HANDSHAKE ACCEPTED // สมาชิกใหม่เชื่อมต่อ / NEW MEMBER CONNECTED"
+WELCOME_PUBLIC_DESCRIPTION_TEMPLATE = (
+    "ข้อมูลบัญชี / Account details:\n"
+    "$ whoami\n> {username}\n"
+    "$ uptime --account\n> {account_age_days} วัน / days\n"
+    "$ grid --members\n> #{member_count} สมาชิก / members"
+)
+WELCOME_PUBLIC_FIELD_NAME = "// ACCESS GATE / จุดเริ่มต้นการเข้าใช้งาน"
+WELCOME_PUBLIC_FIELD_VALUE = (
+    "✅ กด Verify ที่ #✅・verify เพื่อรับ role Member และเข้าถึง member channels (สมาชิกใหม่ต้องรอ 1 นาทีหลังเข้าร่วม)\n"
+    "✅ Click Verify in #✅・verify to receive the Member role and access member channels (new members must wait 1 minute after joining).\n"
+    "⏱️ หากยังเป็น Unverified ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์\n"
+    "⏱️ If you remain Unverified for 1 hour after joining, the bot will kick you from the server.\n"
+    "🔎 บัญชีที่อายุน้อยกว่า 7 วันอาจถูกระบบติด flag เพื่อตรวจเพิ่มเติม\n"
+    "🔎 Accounts younger than 7 days may be flagged by the system for additional checks.\n"
+    "🗺️ อ่าน #🗺️・server-guide เพื่อดูข้อมูลเซิร์ฟเวอร์\n"
+    "🗺️ Read #🗺️・server-guide for server information.\n"
+    "🛡️ ตรวจ #🛡️・detection-log ก่อนเล่นแรงก์\n"
+    "🛡️ Check #🛡️・detection-log before ranked play.\n"
+    "🔒 ห้ามแชร์ token หรือเผยแพร่ไฟล์ภายในเซิร์ฟเวอร์\n"
+    "🔒 Do not share tokens or leak server-only files."
+)
+VERIFY_WAIT_RESPONSE_TEMPLATE = "⏳ กรุณารอ {m} นาที {s} วินาทีหลังเข้าร่วม แล้วกด Verify อีกครั้ง / Please wait {m}m {s}s after joining, then press Verify again."
+VERIFY_SUCCESS_MESSAGE = "✅ ACCESS GATE OPEN: ยืนยันตัวตนสำเร็จ! คุณได้รับ role Member และเข้าถึง member channels แล้ว / Verification complete! You now have the Member role and access to member channels."
+VERIFY_PERMISSION_ERROR_MESSAGE = "⚠️ บอทเปลี่ยน role ไม่ได้ กรุณาแจ้งแอดมินให้ตรวจ permission และลำดับ role / The bot could not update your role. Please ask an admin to check permissions and role hierarchy."
+UNVERIFIED_CHAT_REMINDER = "🔒 ACCESS GATE: กรุณากด Verify ใน #✅・verify ก่อนส่งข้อความ / Please verify in #✅・verify before sending messages."
+ROLE_ADDED_TEMPLATE = "🔗 DEVICE ROLE LOADED: รับ role {role_name} แล้ว / You now have the {role_name} role."
+ROLE_REMOVED_TEMPLATE = "🔗 DEVICE ROLE CLEARED: เอา role {role_name} ออกแล้ว / The {role_name} role has been removed."
+ROLE_CREATE_ERROR_TEMPLATE = "⚠️ สร้าง role {role_name} ไม่สำเร็จ กรุณาแจ้งแอดมินให้สร้างก่อน / Could not create {role_name}. Please ask an admin to create it first."
+VERIFY_SETUP_MESSAGE = (
+    "**✅ Access Gate / ยืนยันตัวตน**\n"
+    "กดปุ่ม **Verify** เพื่อยืนยันตัวตน รับ role **Member** และปลดล็อก member channels / Press **Verify** to confirm your identity, receive the **Member** role, and unlock member channels.\n\n"
+    "⏳ เข้าเซิร์ฟเวอร์ใหม่แล้ว รอ 1 นาทีก่อนกด Verify / After joining, wait 1 minute before pressing Verify.\n"
+    "🕒 หากยังเป็น **Unverified** ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์ / If you remain **Unverified** for 1 hour after joining, the bot will kick you from the server.\n"
+    "⚠️ บัญชีที่อายุน้อยกว่า 7 วันอาจถูก flag เพื่อการตรวจเพิ่มเติม / Accounts younger than 7 days may be flagged for additional checks."
+)
+ROLE_SETUP_MESSAGE = (
+    "**🎖️ เลือกยศ / Self-Assignable Roles**\n"
+    "ตั้งค่าโปรไฟล์อุปกรณ์ของคุณ / Set your device profile.\n"
+    "กดเพื่อรับหรือเอายศออก / Click to add or remove a role: Android / Root / No-Root / Emulator"
+)
+
 # Preload opus explicitly (Debian libopus0) so voice never hits OpusNotLoaded.
 try:
     if not discord.opus.is_loaded():
@@ -420,7 +474,7 @@ class VerifyView(discord.ui.View):
             if left.total_seconds() > 0:
                 m, s = divmod(int(left.total_seconds()), 60)
                 await inter.response.send_message(
-                    f"⏳ แอคใหม่รอ {m} นาที {s} วิ แล้วกดอีกทีนะ / Please wait {m}m {s}s after joining.",
+                    VERIFY_WAIT_RESPONSE_TEMPLATE.format(m=m, s=s),
                     ephemeral=True)
                 return
         unver = discord.utils.get(guild.roles, name="Unverified")
@@ -433,9 +487,9 @@ class VerifyView(discord.ui.View):
             DB.setdefault("verification_deadlines", {}).pop(f"{guild.id}:{member.id}", None)
             DB.setdefault("verification_alerts", {}).pop(f"{guild.id}:{member.id}", None)
             save_data(DB)
-            await inter.response.send_message("ยืนยันแล้ว! ห้องม็อดปลดล็อกแล้ว 🎮 / Verified — drops unlocked!", ephemeral=True)
+            await inter.response.send_message(VERIFY_SUCCESS_MESSAGE, ephemeral=True)
         except discord.Forbidden:
-            await inter.response.send_message("บอทติด permission — บอก SockBoi ขยับ role บอทขึ้นบนสุด / Bot needs higher role.", ephemeral=True)
+            await inter.response.send_message(VERIFY_PERMISSION_ERROR_MESSAGE, ephemeral=True)
 
 class RoleView(discord.ui.View):
     def __init__(self):
@@ -447,15 +501,15 @@ class RoleView(discord.ui.View):
             try:
                 r = await inter.guild.create_role(name=role_name, reason="self-assign")
             except Exception:
-                await inter.response.send_message("สร้างยศไม่ได้ — ให้แอดมินสร้างก่อน", ephemeral=True)
+                await inter.response.send_message(ROLE_CREATE_ERROR_TEMPLATE.format(role_name=role_name), ephemeral=True)
                 return
         m = inter.guild.get_member(inter.user.id)
         if r in m.roles:
             await m.remove_roles(r, reason="self unassign")
-            await inter.response.send_message(f"เอา `{role_name}` ออกแล้ว", ephemeral=True)
+            await inter.response.send_message(ROLE_REMOVED_TEMPLATE.format(role_name=role_name), ephemeral=True)
         else:
             await m.add_roles(r, reason="self assign")
-            await inter.response.send_message(f"รับยศ `{role_name}` แล้ว", ephemeral=True)
+            await inter.response.send_message(ROLE_ADDED_TEMPLATE.format(role_name=role_name), ephemeral=True)
     @discord.ui.button(label="🤖 Android", style=discord.ButtonStyle.secondary, custom_id="role_android")
     async def b1(self, i, b): await self.toggle(i, "Android")
     @discord.ui.button(label="🔓 Root", style=discord.ButtonStyle.secondary, custom_id="role_root")
@@ -521,7 +575,11 @@ async def on_member_join(member):
                 pass
     # welcome DM
     try:
-        await member.send("ยินดีต้อนรับสู่ SockBoi's Payload 🎮 กรุณากดยืนยันที่ #✅・verify ภายใน 1 ชั่วโมงเพื่อปลดล็อกห้อง หากไม่ยืนยัน บัญชีจะถูกเตะออกจากเซิร์ฟเวอร์ อ่าน #🗺️・server-guide และเช็ก #🛡️・detection-log ก่อนเล่นแรงก์นะ / Verify in #✅・verify within 1 hour to unlock channels; unverified accounts are kicked.")
+        await member.send(WELCOME_DM_TEMPLATE.format(
+            verify_channel="#✅・verify",
+            guide_channel="#🗺️・server-guide",
+            detection_channel="#🛡️・detection-log",
+        ))
     except Exception:
         pass
     # public hacker-style welcome in #welcome (fallback #general)
@@ -531,30 +589,25 @@ async def on_member_join(member):
             age_days = max(age.days, 0)
             age_flag = "TRUSTED" if age > timedelta(days=30) else ("NEW" if age > timedelta(days=7) else "FRESH")
             em = discord.Embed(
-                title="[+] INCOMING CONNECTION // handshake accepted",
-                description=(
-                    "```\n"
-                    f"$ whoami\n> {member}\n"
-                    f"$ uptime --account\n> {age_days} days\n"
-                    f"$ grid --members\n> #{member.guild.member_count} nodes online\n"
-                    "```"
+                title=WELCOME_PUBLIC_TITLE,
+                description=WELCOME_PUBLIC_DESCRIPTION_TEMPLATE.format(
+                    username=member.name,
+                    account_age_days=age_days,
+                    member_count=member.guild.member_count,
                 ),
                 color=0x00FF41, timestamp=now)
             em.add_field(
-                name="// PAYLOAD BRIEF",
-                value=("✅ กด verify ที่ #✅・verify ภายใน 1 ชั่วโมง (เข้าใหม่รอ 1 นาที)\n"
-                       "🗺️ อ่าน #🗺️・server-guide ว่าของอยู่ไหน\n"
-                       "🛡️ เช็ก #🛡️・detection-log ก่อนเล่นแรงก์\n"
-                       "Stay clean. No tokens. No leaks."),
+                name=WELCOME_PUBLIC_FIELD_NAME,
+                value=WELCOME_PUBLIC_FIELD_VALUE,
                 inline=False)
             em.set_footer(text=f"node_id :: {member.id}")
             card = await make_welcome_card(member, age_days, age_flag, member.guild.member_count)
             if card:
                 f = discord.File(card, filename="welcome.png")
                 em.set_image(url="attachment://welcome.png")
-                await wch.send(f"👾 {member.mention} jacked into **SockBoi's Payload**", embed=em, file=f)
+                await wch.send(WELCOME_PUBLIC_MESSAGE_TEMPLATE.format(mention=member.mention), embed=em, file=f)
             else:
-                await wch.send(f"👾 {member.mention} jacked into **SockBoi's Payload**", embed=em)
+                await wch.send(WELCOME_PUBLIC_MESSAGE_TEMPLATE.format(mention=member.mention), embed=em)
     except Exception:
         pass
 
@@ -687,7 +740,7 @@ async def on_message(msg):
         except discord.HTTPException:
             pass
         try:
-            await member.send("กรุณากดปุ่ม Verify ใน #✅・verify ก่อนเริ่มพิมพ์ในเซิร์ฟเวอร์ / Please verify in #✅・verify before chatting.")
+            await member.send(UNVERIFIED_CHAT_REMINDER)
         except discord.HTTPException:
             pass
         return
@@ -917,13 +970,13 @@ async def announce(ctx, *, text: str):
 @admin_only()
 async def setup_verify(ctx):
     ch = discord.utils.get(ctx.guild.text_channels, name="✅・verify")
-    await (ch or ctx.channel).send("**✅ ยืนยันตัวตน / Verify**\nกดปุ่มเพื่อรับ Member + ปลดล็อกห้องม็อด ภายใน 1 ชั่วโมงหลังเข้าร่วม / Press to verify within 1 hour of joining to unlock the server.", view=VerifyView())
+    await (ch or ctx.channel).send(VERIFY_SETUP_MESSAGE, view=VerifyView())
 
 @bot.command()
 @admin_only()
 async def setup_roles(ctx):
     ch = discord.utils.get(ctx.guild.text_channels, name="🎖️・role-select")
-    await (ch or ctx.channel).send("**🎖️ เลือกยศ / Self roles**\nกดเพื่อรับ/เอาออก: Android / Root / No-Root / Emulator", view=RoleView())
+    await (ch or ctx.channel).send(ROLE_SETUP_MESSAGE, view=RoleView())
 
 @bot.command()
 @admin_only()
