@@ -63,9 +63,10 @@ def load_data():
             data.setdefault("offenses", {})
             data.setdefault("verification_deadlines", {})
             data.setdefault("verification_alerts", {})
+            data.setdefault("verification_reminders", {})
             return data
     except Exception:
-        return {"offenses": {}, "verification_deadlines": {}, "verification_alerts": {}}
+        return {"offenses": {}, "verification_deadlines": {}, "verification_alerts": {}, "verification_reminders": {}}
 def save_data(d):
     try:
         tmp_file = DATA_FILE + ".tmp"
@@ -78,8 +79,10 @@ DB = load_data()
 DB.setdefault("offenses", {})
 DB.setdefault("verification_deadlines", {})
 DB.setdefault("verification_alerts", {})
+DB.setdefault("verification_reminders", {})
 
 VERIFY_TIMEOUT = timedelta(hours=1)
+VERIFY_REMINDER_AFTER = timedelta(minutes=30)
 VERIFY_ALLOWED_CATEGORIES = set()
 VERIFY_ALLOWED_CHANNELS = {"👋・welcome", "✅・verify"}
 
@@ -106,6 +109,8 @@ WELCOME_DM_TEMPLATE = (
     "✅ ACCESS GATE: Go to {verify_channel} and press Verify 1 minute after joining to receive the Member role and unlock member channels.\n"
     "⏱️ TIMER: หากยังเป็น Unverified ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์\n"
     "⏱️ TIMER: If you remain Unverified for 1 hour after joining, the bot will kick you from the server.\n"
+    "🔔 REMINDER: หากยังไม่ Verify หลัง 30 นาที บอทจะส่ง DM เตือนหนึ่งครั้ง\n"
+    "🔔 REMINDER: If you are still unverified after 30 minutes, the bot will send one reminder DM.\n"
     "📘 อ่าน {guide_channel} และตรวจ {detection_channel} ก่อนเล่นแรงก์\n"
     "📘 Read {guide_channel} and check {detection_channel} before ranked play."
 )
@@ -144,6 +149,7 @@ VERIFY_SETUP_MESSAGE = (
     "กดปุ่ม **Verify** เพื่อยืนยันตัวตน รับ role **Member** และปลดล็อก member channels / Press **Verify** to confirm your identity, receive the **Member** role, and unlock member channels.\n\n"
     "⏳ เข้าเซิร์ฟเวอร์ใหม่แล้ว รอ 1 นาทีก่อนกด Verify / After joining, wait 1 minute before pressing Verify.\n"
     "🕒 หากยังเป็น **Unverified** ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์ / If you remain **Unverified** for 1 hour after joining, the bot will kick you from the server.\n"
+    "🔔 หากยังไม่ Verify หลัง 30 นาที บอทจะส่ง DM เตือนหนึ่งครั้ง / If you are still unverified after 30 minutes, the bot will send one reminder DM.\n"
     "⚠️ บัญชีที่อายุน้อยกว่า 7 วันอาจถูก flag เพื่อการตรวจเพิ่มเติม / Accounts younger than 7 days may be flagged for additional checks."
 )
 ROLE_SETUP_MESSAGE = (
@@ -294,12 +300,13 @@ async def enforce_verification_gate(guild, channel=None):
         await log_to_botlogs(guild, text=f"🔒 Verification gate updated: {changed} channel/category permission overwrites; Unverified can only view information and verification areas.")
 
 async def verification_timeout_worker():
-    """Alert staff once, then kick members still Unverified after the persisted 1-hour deadline."""
+    """DM unverified members once after 30 minutes, then kick at the 1-hour deadline."""
     await bot.wait_until_ready()
     while not bot.is_closed():
         now = datetime.now(timezone.utc)
         deadlines = DB.setdefault("verification_deadlines", {})
         alerts = DB.setdefault("verification_alerts", {})
+        reminders = DB.setdefault("verification_reminders", {})
         changed = False
         for key, raw_deadline in list(deadlines.items()):
             try:
@@ -309,25 +316,29 @@ async def verification_timeout_worker():
             except (TypeError, ValueError):
                 deadlines.pop(key, None)
                 alerts.pop(key, None)
+                reminders.pop(key, None)
                 changed = True
-                continue
-            if deadline > now:
                 continue
             try:
                 guild_id, user_id = (int(part) for part in key.split(":", 1))
             except (ValueError, AttributeError):
                 deadlines.pop(key, None)
                 alerts.pop(key, None)
+                reminders.pop(key, None)
                 changed = True
                 continue
             guild = bot.get_guild(guild_id)
             if guild is None:
+                continue
+            reminder_deadline = deadline - (VERIFY_TIMEOUT - VERIFY_REMINDER_AFTER)
+            if now < reminder_deadline:
                 continue
             try:
                 member = await guild.fetch_member(user_id)
             except discord.NotFound:
                 deadlines.pop(key, None)
                 alerts.pop(key, None)
+                reminders.pop(key, None)
                 changed = True
                 continue
             except discord.HTTPException as exc:
@@ -337,7 +348,28 @@ async def verification_timeout_worker():
             if not unverified or unverified not in member.roles:
                 deadlines.pop(key, None)
                 alerts.pop(key, None)
+                reminders.pop(key, None)
                 changed = True
+                continue
+            if key not in reminders:
+                try:
+                    await member.send(
+                        "🔔 ACCESS GATE REMINDER / แจ้งเตือนยืนยันตัวตน\n\n"
+                        "TH: คุณยังเป็น Unverified อยู่ กรุณากด Verify ใน #✅・verify เพื่อปลดล็อกห้องสมาชิก\n"
+                        "EN: You are still Unverified. Please press Verify in #✅・verify to unlock member channels.\n\n"
+                        "⏱️ หากยังไม่ Verify เมื่อครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์\n"
+                        "⏱️ If you remain unverified for 1 hour after joining, the bot will kick you from the server."
+                    )
+                    reminders[key] = {"at": now.isoformat(), "delivered": True}
+                except (discord.Forbidden, discord.HTTPException) as exc:
+                    # Record the one attempt so closed DMs do not trigger repeated failures.
+                    reminders[key] = {"at": now.isoformat(), "delivered": False}
+                    await log_to_botlogs(
+                        guild,
+                        text=f"⚠️ Could not DM the 30-minute verification reminder to `{member}` (`{member.id}`): {type(exc).__name__}.",
+                    )
+                changed = True
+            if deadline > now:
                 continue
             if key not in alerts:
                 ch = discord.utils.get(guild.text_channels, name="🚨・bot-logs")
@@ -359,6 +391,7 @@ async def verification_timeout_worker():
                 await member.kick(reason="Did not verify within 1 hour of joining")
                 deadlines.pop(key, None)
                 alerts.pop(key, None)
+                reminders.pop(key, None)
                 changed = True
                 await member_log(
                     guild,
@@ -385,6 +418,7 @@ async def on_member_remove(member):
             return
         DB.setdefault("verification_deadlines", {}).pop(f"{member.guild.id}:{member.id}", None)
         DB.setdefault("verification_alerts", {}).pop(f"{member.guild.id}:{member.id}", None)
+        DB.setdefault("verification_reminders", {}).pop(f"{member.guild.id}:{member.id}", None)
         save_data(DB)
         now = datetime.now(timezone.utc)
         action, by, reason = "leave", None, ""
@@ -486,6 +520,7 @@ class VerifyView(discord.ui.View):
                 await member.add_roles(mem, reason="verified")
             DB.setdefault("verification_deadlines", {}).pop(f"{guild.id}:{member.id}", None)
             DB.setdefault("verification_alerts", {}).pop(f"{guild.id}:{member.id}", None)
+            DB.setdefault("verification_reminders", {}).pop(f"{guild.id}:{member.id}", None)
             save_data(DB)
             await inter.response.send_message(VERIFY_SUCCESS_MESSAGE, ephemeral=True)
         except discord.Forbidden:
@@ -549,6 +584,7 @@ async def on_member_join(member):
             await member.add_roles(unver, reason="join gate")
             deadline = now + VERIFY_TIMEOUT
             DB.setdefault("verification_deadlines", {})[f"{member.guild.id}:{member.id}"] = deadline.isoformat()
+            DB.setdefault("verification_reminders", {}).pop(f"{member.guild.id}:{member.id}", None)
             save_data(DB)
             await log_to_botlogs(
                 member.guild,
