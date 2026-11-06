@@ -18,13 +18,14 @@ Run 24/7: python sockboi_bot.py  (needs .env with DISCORD_BOT_TOKEN + GUILD_ID)
 Required bot perms: Administrator (or Manage Messages + Moderate Members + Manage Channels + Manage Roles).
 Role order: SockBoi Bot role ABOVE Member/Unverified (else timeout/role fails).
 """
-import asyncio, os, re, sys
+import asyncio, json, os, re, signal, sys, time
+from contextlib import suppress
+from pathlib import Path
 try:
     sys.stdout.reconfigure(encoding="utf-8", errors="ignore")
     sys.stderr.reconfigure(encoding="utf-8", errors="ignore")
 except Exception:
     pass
-import json
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 import discord
@@ -32,9 +33,25 @@ from discord.ext import commands
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN = os.getenv("DISCORD_BOT_TOKEN")
-GUILD_ID = int(os.getenv("GUILD_ID", "0") or 0)
-assert TOKEN and GUILD_ID, "Set DISCORD_BOT_TOKEN and GUILD_ID in .env"
+
+def validate_environment(environ=None):
+    """Fail fast when required runtime settings are missing or malformed."""
+    env = os.environ if environ is None else environ
+    token = (env.get("DISCORD_BOT_TOKEN") or "").strip()
+    guild_raw = (env.get("GUILD_ID") or "").strip()
+    if not token or token.lower() in {"paste_bot_token_here", "your_token_here", "changeme"}:
+        raise ValueError("DISCORD_BOT_TOKEN is required; set it in platform secrets.")
+    if not guild_raw.isdigit() or int(guild_raw) <= 0:
+        raise ValueError("GUILD_ID must be a positive numeric Discord server ID.")
+    port_raw = (env.get("PORT") or "8080").strip()
+    if not port_raw.isdigit() or not 1 <= int(port_raw) <= 65535:
+        raise ValueError("PORT must be an integer between 1 and 65535.")
+    return {"token": token, "guild_id": int(guild_raw), "port": int(port_raw)}
+
+CONFIG = validate_environment()
+TOKEN = CONFIG["token"]
+GUILD_ID = CONFIG["guild_id"]
+PORT = CONFIG["port"]
 
 # ---------- CONFIG ----------
 STAFF_ROLES = {"SockBoi", "Core Dev"}
@@ -53,28 +70,43 @@ URL_RE = re.compile(r"https?://[^\s<>()\[\]]+", re.I)
 INVITE_RE = re.compile(r"discord(?:\.gg|app\.com/invite)/[A-Za-z0-9-]+", re.I)
 APK_RE = re.compile(r"\.apk(\?|$)|apkpure|apkmirror|mediafire.*\.apk", re.I)
 
-DATA_FILE = "sockboi_bot_data.json"
+DATA_DIR = Path(os.getenv("DATA_DIR", ".")).expanduser()
+DATA_FILE = os.getenv("DATA_FILE") or str(DATA_DIR / "sockboi_bot_data.json")
+
+def empty_data():
+    return {"offenses": {}, "verification_deadlines": {}, "verification_alerts": {}, "verification_reminders": {}}
+
 def load_data():
+    """Load persistent state and migrate older files by adding missing keys."""
+    path = Path(DATA_FILE)
     try:
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if not isinstance(data, dict):
-                data = {}
-            data.setdefault("offenses", {})
-            data.setdefault("verification_deadlines", {})
-            data.setdefault("verification_alerts", {})
-            data.setdefault("verification_reminders", {})
-            return data
-    except Exception:
-        return {"offenses": {}, "verification_deadlines": {}, "verification_alerts": {}, "verification_reminders": {}}
-def save_data(d):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("r", encoding="utf-8") as handle:
+            data = json.load(handle)
+        if not isinstance(data, dict):
+            raise ValueError("root JSON value must be an object")
+        for key, value in empty_data().items():
+            data.setdefault(key, value)
+        return data
+    except FileNotFoundError:
+        return empty_data()
+    except (json.JSONDecodeError, OSError, ValueError) as exc:
+        print(f"[storage] Could not load {path}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
+        return empty_data()
+
+def save_data(data):
+    """Atomically save JSON state so termination cannot leave a partial file."""
+    path = Path(DATA_FILE)
+    tmp_path = path.with_name(path.name + ".tmp")
     try:
-        tmp_file = DATA_FILE + ".tmp"
-        with open(tmp_file, "w", encoding="utf-8") as f:
-            json.dump(d, f)
-        os.replace(tmp_file, DATA_FILE)
-    except Exception:
-        pass
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, separators=(",", ":"))
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp_path, path)
+    except OSError as exc:
+        print(f"[storage] Could not persist {path}: {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
 DB = load_data()
 DB.setdefault("offenses", {})
 DB.setdefault("verification_deadlines", {})
@@ -91,6 +123,10 @@ recent_msgs = defaultdict(lambda: deque(maxlen=10))
 # join tracker for raid: deque[ts]
 join_times = deque(maxlen=50)
 verification_worker_task = None
+gateway_monitor_task = None
+gateway_connected = False
+gateway_reconnect_count = 0
+last_gateway_event = None
 verification_gate_configured = set()
 
 intents = discord.Intents.default()
@@ -298,6 +334,18 @@ async def enforce_verification_gate(guild, channel=None):
             await log_to_botlogs(guild, text=f"⚠️ Verification gate failed for `{target.name}`: {exc}")
     if changed:
         await log_to_botlogs(guild, text=f"🔒 Verification gate updated: {changed} channel/category permission overwrites; Unverified can only view information and verification areas.")
+
+async def gateway_monitor():
+    """Log gateway readiness while discord.py performs automatic reconnects."""
+    while not bot.is_closed():
+        if not bot.is_ready() or not gateway_connected:
+            print(json.dumps({
+                "event": "gateway_not_ready",
+                "reconnect_attempts": gateway_reconnect_count,
+                "last_gateway_event": last_gateway_event,
+                "at": datetime.now(timezone.utc).isoformat(),
+            }), flush=True)
+        await asyncio.sleep(max(15, int(os.getenv("RECONNECT_MONITOR_INTERVAL", "60"))))
 
 async def verification_timeout_worker():
     """DM unverified members once after 30 minutes, then kick at the 1-hour deadline."""
@@ -555,8 +603,34 @@ class RoleView(discord.ui.View):
     async def b4(self, i, b): await self.toggle(i, "Emulator")
 
 @bot.event
+async def on_connect():
+    global gateway_connected, last_gateway_event
+    gateway_connected = True
+    last_gateway_event = time.time()
+    print("[gateway] connected to Discord Gateway", flush=True)
+
+@bot.event
+async def on_disconnect():
+    global gateway_connected, gateway_reconnect_count, last_gateway_event
+    gateway_connected = False
+    gateway_reconnect_count += 1
+    last_gateway_event = time.time()
+    print(json.dumps({"event":"gateway_disconnect","reconnect_attempts":gateway_reconnect_count,
+                      "at":datetime.now(timezone.utc).isoformat()}), flush=True)
+
+@bot.event
+async def on_resumed():
+    global gateway_connected, last_gateway_event
+    gateway_connected = True
+    last_gateway_event = time.time()
+    print(json.dumps({"event":"gateway_resumed","reconnect_attempts":gateway_reconnect_count,
+                      "at":datetime.now(timezone.utc).isoformat()}), flush=True)
+
+@bot.event
 async def on_ready():
-    global verification_worker_task
+    global verification_worker_task, gateway_monitor_task, gateway_connected, last_gateway_event
+    gateway_connected = True
+    last_gateway_event = time.time()
     bot.add_view(VerifyView())
     bot.add_view(RoleView())
     for guild in bot.guilds:
@@ -564,8 +638,10 @@ async def on_ready():
             await enforce_verification_gate(guild)
             verification_gate_configured.add(guild.id)
     if verification_worker_task is None or verification_worker_task.done():
-        verification_worker_task = asyncio.create_task(verification_timeout_worker())
-    print(f"Logged in as {bot.user} — guild {GUILD_ID} — automate ON")
+        verification_worker_task = asyncio.create_task(verification_timeout_worker(), name="verification-timeout-worker")
+    if gateway_monitor_task is None or gateway_monitor_task.done():
+        gateway_monitor_task = asyncio.create_task(gateway_monitor(), name="gateway-monitor")
+    print(f"Logged in as {bot.user} — guild {GUILD_ID} — automate ON", flush=True)
 
 @bot.event
 async def on_guild_channel_create(channel):
@@ -1058,5 +1134,87 @@ async def pinall(ctx):
                 break
     await ctx.send(f"Pinned {pinned} messages 📌")
 
+async def health_http_handler(reader, writer):
+    """Small internal HTTP server for platform probes; no web framework required."""
+    try:
+        request = await asyncio.wait_for(reader.readline(), timeout=5)
+        parts = request.decode("latin-1", errors="replace").strip().split()
+        path = parts[1].split("?", 1)[0] if len(parts) >= 2 else "/"
+        while True:
+            line = await asyncio.wait_for(reader.readline(), timeout=5)
+            if line in (b"\r\n", b"\n", b""):
+                break
+        ready = bool(bot.is_ready() and gateway_connected)
+        if path == "/livez":
+            status, payload = 200, {"status": "alive"}
+        elif path == "/readyz":
+            status = 200 if ready else 503
+            payload = {"status":"ready" if ready else "not_ready",
+                       "discord_ready":bool(bot.is_ready()), "gateway_connected":gateway_connected,
+                       "guild_available":bot.get_guild(GUILD_ID) is not None,
+                       "latency_ms":round(bot.latency*1000,2) if bot.is_ready() else None,
+                       "reconnect_attempts":gateway_reconnect_count,
+                       "last_gateway_event":last_gateway_event}
+        else:
+            status, payload = 404, {"error":"not_found"}
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        reason = {200:"OK",404:"Not Found",503:"Service Unavailable"}[status]
+        headers = (f"HTTP/1.1 {status} {reason}\r\n"
+                   "Content-Type: application/json; charset=utf-8\r\n"
+                   f"Content-Length: {len(body)}\r\n"
+                   "Connection: close\r\n\r\n").encode("ascii")
+        writer.write(headers + body)
+        await writer.drain()
+    except (asyncio.TimeoutError, ConnectionError, BrokenPipeError):
+        pass
+    finally:
+        writer.close()
+        with suppress(Exception):
+            await writer.wait_closed()
+
+async def run_bot():
+    """Run the bot with signal-aware shutdown and a private health listener."""
+    global gateway_monitor_task, verification_worker_task
+    loop = asyncio.get_running_loop()
+    shutdown_event = asyncio.Event()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        with suppress(NotImplementedError, RuntimeError):
+            loop.add_signal_handler(sig, shutdown_event.set)
+    health_server = await asyncio.start_server(health_http_handler, "0.0.0.0", PORT)
+    print(f"[health] listening on 0.0.0.0:{PORT} (/livez, /readyz)", flush=True)
+    bot_task = asyncio.create_task(bot.start(TOKEN, reconnect=True), name="discord-client")
+    shutdown_task = asyncio.create_task(shutdown_event.wait(), name="shutdown-signal")
+    try:
+        done, _ = await asyncio.wait({bot_task, shutdown_task}, return_when=asyncio.FIRST_COMPLETED)
+        if bot_task in done:
+            await bot_task
+        else:
+            print("[shutdown] signal received; closing Discord client", flush=True)
+            await bot.close()
+            with suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(bot_task, timeout=20)
+    finally:
+        if not bot.is_closed():
+            await bot.close()
+        for task in (verification_worker_task, gateway_monitor_task):
+            if task and not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+        if not bot_task.done():
+            bot_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await bot_task
+        save_data(DB)
+        shutdown_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await shutdown_task
+        health_server.close()
+        await health_server.wait_closed()
+        print("[shutdown] state saved; process stopped cleanly", flush=True)
+
 if __name__ == "__main__":
-    bot.run(TOKEN)
+    try:
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        pass
