@@ -1,34 +1,43 @@
 # SockBoi's Payload — Discord Bot
 
-Automate bot for SockBoi's Payload (TH/EN): token/webhook/nitro protection, link + APK filter,
-anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM, logging to `#🚨・bot-logs`.
+Automation bot for SockBoi's Payload (TH/EN): token/webhook/nitro protection, link + APK filter, anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM, logging, and optional voice greeting.
+
+## Cloud deployment (Northflank)
+
+This is a persistent Discord Gateway worker, not a request-driven web API. The repository includes Docker health endpoints, graceful shutdown, and persistent JSON state support.
+
+**Deployment guide:** [RUN-24-7.md](RUN-24-7.md)
+
+Recommended settings:
+- Deployment Service from this GitHub repository, Dockerfile build
+- One replica only
+- Secrets: `DISCORD_BOT_TOKEN`, `GUILD_ID`
+- Persistent Volume mounted at `/data`; set `DATA_DIR=/data`
+- Liveness HTTP probe: port `8080`, path `/livez`
+- Optional readiness probe: port `8080`, path `/readyz`
+- Enable Northflank Continuous Deployment for the selected branch
+
+GitHub Actions at `.github/workflows/ci.yml` runs compile checks, unit tests, and Docker build. Northflank Git integration performs the actual deployment after a push.
 
 ## Verification policy
-- New members receive `Unverified` and can view only `#👋・welcome` and `#✅・verify`; all other categories/channels are hidden until verification. The bot enforces channel/category permission overwrites on startup and when new channels are created.
-- Unverified members cannot send messages anywhere (the bot also removes messages as a fallback if channel permissions are misconfigured).
-- Pressing the Verify button removes `Unverified` and grants `Member`.
-- New members can press Verify after a 1-minute anti-raid grace period; the 1-hour kick deadline remains unchanged.
-- Members still `Unverified` 30 minutes after joining receive one bilingual reminder DM. If DMs are closed, the bot records the failed attempt and logs it rather than retrying repeatedly.
-- Members who still have `Unverified` one hour after joining are kicked. Deadlines are saved in `sockboi_bot_data.json` and checked by the bot worker.
-- When that deadline is reached, the bot sends a one-time staff alert in `#🚨・bot-logs` before attempting the kick; it does not ping `@everyone`.
-- Railway note: attach a persistent volume if you need verification deadlines/offense data to survive container replacement/redeploy. Without persistent storage, deadlines survive ordinary process restarts only while that filesystem remains intact.
+- New members receive `Unverified` and can view only `#👋・welcome` and `#✅・verify`.
+- Unverified members cannot send messages; the bot also removes messages as a fallback.
+- Verify removes `Unverified` and grants `Member` after the one-minute anti-raid grace period.
+- Unverified members receive one bilingual reminder after 30 minutes and are kicked after one hour.
+- Verification deadlines and offense counters are persisted under `DATA_DIR`.
 
 ## Run locally
-```
+```bash
+python -m venv .venv
 pip install -r requirements.txt
-copy .env.example .env   # then fill DISCORD_BOT_TOKEN + GUILD_ID
+cp .env.example .env
+# Set DISCORD_BOT_TOKEN and GUILD_ID in .env
 python sockboi_bot.py
 ```
 
-## Deploy (Railway)
-1. New Project → Deploy from GitHub (this repo)
-2. Variables: `DISCORD_BOT_TOKEN`, `GUILD_ID=1555677417518137354`, `OWN_DOMAINS=`
-3. Start command: `python sockboi_bot.py`
-
 ## One-time server setup
+```bash
+python setup_server.py
+python update_thai_final.py
 ```
-python setup_server.py     # roles + channels + topics
-python update_thai_final.py  # TH migration + pins + forms
-```
-
-Admin in Discord: `!status` `!setup_verify` `!setup_roles` `!pinall`
+Admin commands: `!status`, `!diag`, `!setup_verify`, `!setup_roles`, `!pinall`.

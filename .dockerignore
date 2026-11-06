@@ -1,7 +1,12 @@
 .git/
+.github/
 __pycache__/
-*.pyc
-.env
+*.py[cod]
+.pytest_cache/
 .venv/
 venv/
+.env
+.env.*
 sockboi_bot_data.json
+sockboi_bot_data.json.tmp
+data/
