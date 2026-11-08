@@ -2,41 +2,26 @@
 
 Automation bot for SockBoi's Payload (TH/EN): token/webhook/nitro protection, link + APK filter, anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM, logging, and optional voice greeting.
 
-## Cloud deployment (Northflank)
+## Run locally (24/7 on this PC)
 
-This is a persistent Discord Gateway worker, not a request-driven web API. The repository includes Docker health endpoints, graceful shutdown, and persistent JSON state support.
+The bot runs as a persistent Discord Gateway worker. To keep it online, just leave `python sockboi_bot.py` running.
 
-**Deployment guide:** [RUN-24-7.md](RUN-24-7.md)
+**Windows — start-on-boot (recommended):** create Task Scheduler entry that runs at logon:
 
-Recommended settings:
-- Deployment Service from this GitHub repository, Dockerfile build
-- One replica only
-- Secrets: `DISCORD_BOT_TOKEN`, `GUILD_ID`
-- Persistent Volume mounted at `/data`; set `DATA_DIR=/data`
-- Liveness HTTP probe: port `8080`, path `/livez`
-- Optional readiness probe: port `8080`, path `/readyz`
-- Enable Northflank Continuous Deployment for the selected branch
+- Program: `pythonw.exe` (or full path to your Python)
+- Arguments: `sockboi_bot.py`
+- Start in: this folder
+- Trigger: At log on
 
-GitHub Actions at `.github/workflows/ci.yml` runs compile checks, unit tests, and Docker build. Northflank Git integration performs the actual deployment after a push.
-
-## Fly.io deployment
-
-The repo includes `fly.toml` and [FLY-IO.md](FLY-IO.md). In short:
-1. `fly apps create sockboi-payload-discord`
-2. `fly volumes create sockboi_data --region sin --size 1`
-3. `fly secrets set DISCORD_BOT_TOKEN=... GUILD_ID=1555677417518137354`
-4. `fly deploy`
-
-`auto_stop_machines` is **off** — the Discord Gateway must stay connected.
-
-## Oracle Cloud Always Free
-
-Free 24/7 option: create an Always Free ARM VM (`VM.Standard.A1.Flex`) on https://cloud.oracle.com/ and run the Docker container with `--restart=always`. Full guide: [ORACLE-CLOUD.md](ORACLE-CLOUD.md). Quick path:
-```bash
-docker build -t sockboi-payload-bot .
-docker run -d --name sockboi-payload-bot --restart=always --env-file .env -v sockboi_data:/data sockboi-payload-bot
+**Manual run:**
+```cmd
+cd "C:\Users\SockBoi\Downloads\SockBoi Ai\sockboi-payload-discord"
+python sockboi_bot.py
 ```
-(หรือ `docker compose up -d` — repo มี `docker-compose.yml` ให้แล้ว)
+
+Hardware notes: bot uses ~150–250 MB RAM, almost no CPU. RAM/disk it needs is trivial; a mid-range PC is plenty.
+
+Requirements: Windows Task Scheduler handles restarts automatically; no Docker/cloud required.
 
 ## Verification policy
 - New members receive `Unverified` and can view only `#👋・welcome` and `#✅・verify`.
