@@ -19,6 +19,16 @@ Recommended settings:
 
 GitHub Actions at `.github/workflows/ci.yml` runs compile checks, unit tests, and Docker build. Northflank Git integration performs the actual deployment after a push.
 
+## Fly.io deployment
+
+The repo includes `fly.toml` and [FLY-IO.md](FLY-IO.md). In short:
+1. `fly apps create sockboi-payload-discord`
+2. `fly volumes create sockboi_data --region sin --size 1`
+3. `fly secrets set DISCORD_BOT_TOKEN=... GUILD_ID=1555677417518137354`
+4. `fly deploy`
+
+`auto_stop_machines` is **off** — the Discord Gateway must stay connected.
+
 ## Verification policy
 - New members receive `Unverified` and can view only `#👋・welcome` and `#✅・verify`.
 - Unverified members cannot send messages; the bot also removes messages as a fallback.
