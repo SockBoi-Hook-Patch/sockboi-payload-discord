@@ -29,6 +29,15 @@ The repo includes `fly.toml` and [FLY-IO.md](FLY-IO.md). In short:
 
 `auto_stop_machines` is **off** — the Discord Gateway must stay connected.
 
+## Oracle Cloud Always Free
+
+Free 24/7 option: create an Always Free ARM VM (`VM.Standard.A1.Flex`) on https://cloud.oracle.com/ and run the Docker container with `--restart=always`. Full guide: [ORACLE-CLOUD.md](ORACLE-CLOUD.md). Quick path:
+```bash
+docker build -t sockboi-payload-bot .
+docker run -d --name sockboi-payload-bot --restart=always --env-file .env -v sockboi_data:/data sockboi-payload-bot
+```
+(หรือ `docker compose up -d` — repo มี `docker-compose.yml` ให้แล้ว)
+
 ## Verification policy
 - New members receive `Unverified` and can view only `#👋・welcome` and `#✅・verify`.
 - Unverified members cannot send messages; the bot also removes messages as a fallback.
