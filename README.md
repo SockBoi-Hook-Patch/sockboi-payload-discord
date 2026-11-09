@@ -10,7 +10,7 @@ The repo re-includes `Dockerfile`, `railway.toml` and `.dockerignore` for Railwa
 2. Variables (หรือ Secrets):
    - `DISCORD_BOT_TOKEN` = token ใหม่
    - `GUILD_ID` = `1555677417518137354`
-   - `OWN_DOMAINS` = (ว่าง)
+   - `OWN_DOMAINS` = `facebook.com,fb.com,youtube.com,youtu.be,telegram.me,t.me,github.com,mediafire.com,earnpaste.com,linkvertise.com,link-target.net`
    - `WELCOME_VOICE` = `1`
    - `PORT` = `8080`
    - `DATA_DIR` = `/data`
