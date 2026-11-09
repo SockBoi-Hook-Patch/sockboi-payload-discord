@@ -2,6 +2,26 @@
 
 Automation bot for SockBoi's Payload (TH/EN): token/webhook/nitro protection, link + APK filter, anti-spam, anti-raid slowmode, verification gate + self-role buttons, welcome DM, logging, and optional voice greeting.
 
+## Deploy on Railway
+
+The repo re-includes `Dockerfile`, `railway.toml` and `.dockerignore` for Railway.
+
+1. Railway → New Project → Deploy from GitHub → เลือก repo นี้
+2. Variables (หรือ Secrets):
+   - `DISCORD_BOT_TOKEN` = token ใหม่
+   - `GUILD_ID` = `1555677417518137354`
+   - `OWN_DOMAINS` = (ว่าง)
+   - `WELCOME_VOICE` = `1`
+   - `PORT` = `8080`
+   - `DATA_DIR` = `/data`
+3. Settings → Networking → ไม่ต้องเปิด public port (bot เป็น worker) — Railway ใช้ health check ภายในที่ `/livez`
+4. ถ้าใช้ Persistent Volume: แนะนำสร้าง volume แล้ว mount ที่ `/data` (state จะอยู่ถาวร)
+5. Deploy → ดู Logs: ต้องเห็น `Logged in as ... automate ON`
+
+GitHub Actions ที่ `.github/workflows/ci.yml` (ถ้ามี) จะรัน CI; Railway Git integration จะ redeploy จาก branch `main` หลัง push.
+
+อย่าใส่ token ใน Git — ใช้ Railway Variables เท่านั้น.
+
 ## Run locally (24/7 on this PC)
 
 The bot runs as a persistent Discord Gateway worker. To keep it online, just leave `python sockboi_bot.py` running.
