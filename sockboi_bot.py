@@ -114,7 +114,7 @@ DB.setdefault("verification_alerts", {})
 DB.setdefault("verification_reminders", {})
 
 VERIFY_TIMEOUT = timedelta(hours=1)
-VERIFY_REMINDER_AFTER = timedelta(minutes=30)
+VERIFY_REMINDER_AFTER = timedelta(minutes=45)
 VERIFY_ALLOWED_CATEGORIES = set()
 VERIFY_ALLOWED_CHANNELS = {"👋・welcome", "✅・verify"}
 
@@ -146,7 +146,7 @@ WELCOME_DM_TEMPLATE = (
     "⏱️ TIMER: หากยังเป็น Unverified ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์\n"
     "⏱️ TIMER: If you remain Unverified for 1 hour after joining, the bot will kick you from the server.\n"
     "🔔 REMINDER: หากยังไม่ Verify หลัง 30 นาที บอทจะส่ง DM เตือนหนึ่งครั้ง\n"
-    "🔔 REMINDER: If you are still unverified after 30 minutes, the bot will send one reminder DM.\n"
+    "🔔 REMINDER: If you are still unverified after 45 minutes, the bot will send one reminder DM.\n"
     "📘 อ่าน {guide_channel} และตรวจ {detection_channel} ก่อนเล่นแรงก์\n"
     "📘 Read {guide_channel} and check {detection_channel} before ranked play."
 )
@@ -185,7 +185,7 @@ VERIFY_SETUP_MESSAGE = (
     "กดปุ่ม **Verify** เพื่อยืนยันตัวตน รับ role **Member** และปลดล็อก member channels / Press **Verify** to confirm your identity, receive the **Member** role, and unlock member channels.\n\n"
     "⏳ เข้าเซิร์ฟเวอร์ใหม่แล้ว รอ 1 นาทีก่อนกด Verify / After joining, wait 1 minute before pressing Verify.\n"
     "🕒 หากยังเป็น **Unverified** ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์ / If you remain **Unverified** for 1 hour after joining, the bot will kick you from the server.\n"
-    "🔔 หากยังไม่ Verify หลัง 30 นาที บอทจะส่ง DM เตือนหนึ่งครั้ง / If you are still unverified after 30 minutes, the bot will send one reminder DM.\n"
+    "🔔 หากยังไม่ Verify หลัง 45 นาที บอทจะส่ง DM เตือนหนึ่งครั้ง / If you are still unverified after 45 minutes, the bot will send one reminder DM.\n"
     "⚠️ บัญชีที่อายุน้อยกว่า 7 วันอาจถูก flag เพื่อการตรวจเพิ่มเติม / Accounts younger than 7 days may be flagged for additional checks."
 )
 ROLE_SETUP_MESSAGE = (
@@ -348,7 +348,7 @@ async def gateway_monitor():
         await asyncio.sleep(max(15, int(os.getenv("RECONNECT_MONITOR_INTERVAL", "60"))))
 
 async def verification_timeout_worker():
-    """DM unverified members once after 30 minutes, then kick at the 1-hour deadline."""
+    """DM unverified members once after 45 minutes, then kick at the 1-hour deadline."""
     await bot.wait_until_ready()
     while not bot.is_closed():
         now = datetime.now(timezone.utc)
@@ -402,11 +402,10 @@ async def verification_timeout_worker():
             if key not in reminders:
                 try:
                     await member.send(
-                        "🔔 ACCESS GATE REMINDER / แจ้งเตือนยืนยันตัวตน\n\n"
-                        "TH: คุณยังเป็น Unverified อยู่ กรุณากด Verify ใน #✅・verify เพื่อปลดล็อกห้องสมาชิก\n"
-                        "EN: You are still Unverified. Please press Verify in #✅・verify to unlock member channels.\n\n"
-                        "⏱️ หากยังไม่ Verify เมื่อครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์\n"
-                        "⏱️ If you remain unverified for 1 hour after joining, the bot will kick you from the server."
+                        "🔔 Verification reminder\n\n"
+                        "You are still Unverified. Please press Verify in #✅・verify to unlock member channels.\n\n"
+                        "⚠️ If you do not verify, you will be KICKED from the server.\n"
+                        "⏱️ Kick happens 1 hour after you joined, so verify now to keep your access."
                     )
                     reminders[key] = {"at": now.isoformat(), "delivered": True}
                 except (discord.Forbidden, discord.HTTPException) as exc:
@@ -414,7 +413,7 @@ async def verification_timeout_worker():
                     reminders[key] = {"at": now.isoformat(), "delivered": False}
                     await log_to_botlogs(
                         guild,
-                        text=f"⚠️ Could not DM the 30-minute verification reminder to `{member}` (`{member.id}`): {type(exc).__name__}.",
+                        text=f"⚠️ Could not DM the 45-minute verification reminder to `{member}` (`{member.id}`): {type(exc).__name__}.",
                     )
                 changed = True
             if deadline > now:
@@ -739,33 +738,49 @@ async def on_voice_state_update(member, before, after):
         import tempfile
         ff = ffmpeg_path()
         if ff is None:
-            await log_to_botlogs(member.guild, text="⚠️ Voice greeting skipped: ไม่มี ffmpeg (system + bundled)")
+            await log_to_botlogs(member.guild, text="⚠️ Voice greeting skipped: no ffmpeg found (system + bundled)")
             return
         from gtts import gTTS
-        text = f"ยินดีต้อนรับ {member.display_name}"
+        text = f"Welcome {member.display_name}"
         try:
-            # clear normal female voice (Premwadee, no pitch/rate shift)
+            # clear natural English female voice, no pitch/rate shift
             import edge_tts
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
                 path = tf.name
-            await edge_tts.Communicate(text, "th-TH-PremwadeeNeural", rate="-15%", pitch="+0Hz").save(path)
+            await edge_tts.Communicate(text, "en-US-AriaNeural", rate="+0%", pitch="+0Hz").save(path)
         except Exception:
             try:
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tf:
-                    gTTS(text=text, lang="th").save(tf.name)
+                    gTTS(text=text, lang="en").save(tf.name)
                     path = tf.name
             except Exception as e:
-                await log_to_botlogs(member.guild, text=f"⚠️ TTS ล้มเหลว: {e}")
+                await log_to_botlogs(member.guild, text=f"⚠️ Voice greeting skipped: TTS failed ({type(e).__name__}: {e})")
                 return
         try:
-            vc = await after.channel.connect(timeout=10)
+            # Force-clean any stale voice session first; a leftover voice websocket
+            # from a previous connect is the usual cause of
+            # "Cannot write to closing transport".
+            old_vc = member.guild.voice_client
+            if old_vc is not None:
+                try:
+                    await old_vc.disconnect(force=True)
+                except Exception:
+                    pass
+                await asyncio.sleep(1)
+            vc = await after.channel.connect(timeout=10, reconnect=False)
         except Exception as e:
-            await log_to_botlogs(member.guild, text=f"⚠️ เข้าห้องเสียงไม่ได้: {e}")
+            # One retry after a short delay: a just-closing voice websocket can
+            # still reject the first connect attempt.
             try:
-                os.unlink(path)
-            except Exception:
-                pass
-            return
+                await asyncio.sleep(2)
+                vc = await after.channel.connect(timeout=10, reconnect=False)
+            except Exception as e2:
+                await log_to_botlogs(member.guild, text=f"⚠️ Voice greeting skipped: cannot join VC ({type(e2).__name__}: {e2})")
+                try:
+                    os.unlink(path)
+                except Exception:
+                    pass
+                return
         try:
             src = discord.FFmpegPCMAudio(path, executable=ff)
             vc.play(src)
@@ -775,9 +790,14 @@ async def on_voice_state_update(member, before, after):
         except Exception as e:
             import traceback as _tb
             detail = _tb.format_exc(limit=5)[-800:]
-            await log_to_botlogs(member.guild, text=f"⚠️ เล่นเสียงล้มเหลว: {type(e).__name__}: {e!r}\n```{detail}```")
+            await log_to_botlogs(member.guild, text=f"⚠️ Voice playback failed: {type(e).__name__}: {e!r}\n```{detail}```")
         finally:
             try:
+                vc.stop()
+            except Exception:
+                pass
+            try:
+                await asyncio.sleep(0.5)
                 await vc.disconnect()
             except Exception:
                 pass
