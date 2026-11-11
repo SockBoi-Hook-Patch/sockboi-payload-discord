@@ -17,11 +17,11 @@ class VerificationPolicyTests(unittest.TestCase):
     def test_verification_timeout_is_one_hour(self):
         self.assertEqual(sockboi_bot.VERIFY_TIMEOUT.total_seconds(), 3600)
 
-    def test_unverified_reminder_is_after_30_minutes_and_before_kick(self):
-        self.assertEqual(sockboi_bot.VERIFY_REMINDER_AFTER.total_seconds(), 1800)
+    def test_unverified_reminder_is_after_45_minutes_and_before_kick(self):
+        self.assertEqual(sockboi_bot.VERIFY_REMINDER_AFTER.total_seconds(), 2700)
         self.assertEqual(
             sockboi_bot.VERIFY_TIMEOUT - sockboi_bot.VERIFY_REMINDER_AFTER,
-            sockboi_bot.timedelta(minutes=30),
+            sockboi_bot.timedelta(minutes=15),
         )
 
     def test_new_members_can_verify_after_one_minute(self):
@@ -32,9 +32,9 @@ class VerificationPolicyTests(unittest.TestCase):
         self.assertIn("ACCESS GATE", sockboi_bot.WELCOME_PUBLIC_FIELD_NAME)
         self.assertIn("1 นาที", sockboi_bot.WELCOME_PUBLIC_FIELD_VALUE)
         self.assertIn("1 hour", sockboi_bot.WELCOME_PUBLIC_FIELD_VALUE)
-        self.assertIn("30 นาที", sockboi_bot.WELCOME_DM_TEMPLATE)
-        self.assertIn("30 minutes", sockboi_bot.WELCOME_DM_TEMPLATE)
-        self.assertIn("30 นาที", sockboi_bot.VERIFY_SETUP_MESSAGE)
+        self.assertIn("45 นาที", sockboi_bot.WELCOME_DM_TEMPLATE)
+        self.assertIn("45 minutes", sockboi_bot.WELCOME_DM_TEMPLATE)
+        self.assertIn("45 นาที", sockboi_bot.VERIFY_SETUP_MESSAGE)
         self.assertIn("DEVICE ROLE LOADED", sockboi_bot.ROLE_ADDED_TEMPLATE)
         self.assertIn("ACCESS GATE OPEN", sockboi_bot.VERIFY_SUCCESS_MESSAGE)
         self.assertIn("wait 1 minute", sockboi_bot.VERIFY_SETUP_MESSAGE)

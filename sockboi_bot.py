@@ -145,7 +145,7 @@ WELCOME_DM_TEMPLATE = (
     "✅ ACCESS GATE: Go to {verify_channel} and press Verify 1 minute after joining to receive the Member role and unlock member channels.\n"
     "⏱️ TIMER: หากยังเป็น Unverified ครบ 1 ชั่วโมงหลังเข้าร่วม บอทจะ kick ออกจากเซิร์ฟเวอร์\n"
     "⏱️ TIMER: If you remain Unverified for 1 hour after joining, the bot will kick you from the server.\n"
-    "🔔 REMINDER: หากยังไม่ Verify หลัง 30 นาที บอทจะส่ง DM เตือนหนึ่งครั้ง\n"
+    "🔔 REMINDER: หากยังไม่ Verify หลัง 45 นาที บอทจะส่ง DM เตือนหนึ่งครั้ง\n"
     "🔔 REMINDER: If you are still unverified after 45 minutes, the bot will send one reminder DM.\n"
     "📘 อ่าน {guide_channel} และตรวจ {detection_channel} ก่อนเล่นแรงก์\n"
     "📘 Read {guide_channel} and check {detection_channel} before ranked play."
