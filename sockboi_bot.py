@@ -55,7 +55,7 @@ PORT = CONFIG["port"]
 
 # ---------- CONFIG ----------
 STAFF_ROLES = {"SockBoi", "Core Dev"}
-BYPASS_LINK_ROLES = {"SockBoi", "Core Dev", "Verified Modder"}
+BYPASS_LINK_ROLES = {"SockBoi", "Core Dev", "Verified Modder", "💗・Supporter"}
 APK_POST_ROLES = {"SockBoi", "Core Dev"}
 LINK_BLOCK_CHANNELS = {"💬・general", "❓・help"}
 WHITELIST_DOMAINS = {"github.com", "t.me", "telegram.me", "ezdn.app", "buymeacoffee.com"}
