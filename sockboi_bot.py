@@ -58,7 +58,7 @@ STAFF_ROLES = {"SockBoi", "Core Dev"}
 BYPASS_LINK_ROLES = {"SockBoi", "Core Dev", "Verified Modder"}
 APK_POST_ROLES = {"SockBoi", "Core Dev"}
 LINK_BLOCK_CHANNELS = {"💬・general", "❓・help"}
-WHITELIST_DOMAINS = {"github.com", "t.me", "telegram.me"}
+WHITELIST_DOMAINS = {"github.com", "t.me", "telegram.me", "ezdn.app", "buymeacoffee.com"}
 OWN_DOMAINS = {d.strip().lower() for d in os.getenv("OWN_DOMAINS", "").split(",") if d.strip()}
 ALLOWED_DOMAINS = WHITELIST_DOMAINS | OWN_DOMAINS
 

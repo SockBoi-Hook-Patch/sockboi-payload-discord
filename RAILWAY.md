@@ -10,7 +10,7 @@
 2. Variables:
    - `DISCORD_BOT_TOKEN` = token (หลัง Reset)
    - `GUILD_ID` = `1555677417518137354`
-   - `OWN_DOMAINS` = `facebook.com,fb.com,youtube.com,youtu.be,telegram.me,t.me,github.com,mediafire.com,earnpaste.com,linkvertise.com,link-target.net`
+   - `OWN_DOMAINS` = `facebook.com,fb.com,youtube.com,youtu.be,telegram.me,t.me,github.com,mediafire.com,earnpaste.com,linkvertise.com,link-target.net,ezdn.app,buymeacoffee.com`
    - `WELCOME_VOICE` = `1`
    - `PORT` = `8080`
    - `DATA_DIR` = `/data`
