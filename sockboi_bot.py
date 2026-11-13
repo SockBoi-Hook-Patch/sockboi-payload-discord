@@ -1012,10 +1012,16 @@ async def unlock(ctx):
 
 DONOR_ROLE = "💗・Supporter"
 
+CURRENCY_SYMBOLS = {
+    "THB": "฿", "USD": "$", "EUR": "€", "GBP": "£", "JPY": "¥", "KRW": "₩",
+    "SGD": "S$", "MYR": "RM", "CNY": "¥", "AUD": "A$", "PHP": "₱", "VND": "₫",
+    "HKD": "HK$", "TWD": "NT$", "INR": "₹", "RUB": "₽",
+}
+
 DONOR_DM_TEMPLATE = (
     "💗 Thank you for supporting SockBoi's Payload!\n"
     "\n"
-    "Your donation of **{amount} {currency}** was received — you've been given the "
+    "Your donation of **{display}** was received — you've been given the "
     "**💗・Supporter** role, including access to the private supporter lounge with "
     "early script access.\n"
     "\n"
@@ -1032,22 +1038,25 @@ async def donate(ctx, member: discord.Member, amount: str, currency: str = "THB"
     if role is None:
         await ctx.send(f"ไม่พบ role `{DONOR_ROLE}` — สร้างก่อนใช้คำสั่งนี้")
         return
+    cur = currency.upper()
+    sym = CURRENCY_SYMBOLS.get(cur)
+    display = f"{sym}{amount}" if sym else f"{amount} {cur}"
     try:
         if role not in member.roles:
-            await member.add_roles(role, reason=f"donation {amount} {currency}")
+            await member.add_roles(role, reason=f"donation {amount} {cur}")
         else:
             await ctx.send(f"ℹ️ {member.mention} มี role Supporter อยู่แล้ว — ส่ง DM ขอบคุณให้ใหม่")
     except discord.Forbidden:
         await ctx.send("ให้ role ไม่ได้ — role บอทต้องอยู่เหนือเป้าหมาย")
         return
     try:
-        await member.send(DONOR_DM_TEMPLATE.format(amount=amount, currency=currency))
+        await member.send(DONOR_DM_TEMPLATE.format(display=display))
         dm_note = "DM ขอบคุณส่งแล้ว"
     except (discord.Forbidden, discord.HTTPException):
         dm_note = "ส่ง DM ไม่ได้ (ปิด DM ไว้)"
-    await ctx.send(f"💗 {member.mention} รับ role `{DONOR_ROLE}` แล้ว · ยอด {amount} {currency} · {dm_note}")
+    await ctx.send(f"💗 {member.mention} รับ role `{DONOR_ROLE}` แล้ว · ยอด {display} · {dm_note}")
     await log_to_botlogs(ctx.guild, text=(
-        f"💗 Donor added: `{member}` (`{member.id}`) — {amount} {currency}, "
+        f"💗 Donor added: `{member}` (`{member.id}`) — {display}, "
         f"role `{DONOR_ROLE}`, DM: {'sent' if 'ส่งแล้ว' in dm_note else 'failed'}"
     ))
 
